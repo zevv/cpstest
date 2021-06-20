@@ -26,8 +26,7 @@ type
     epfd*: cint
     work*: Deque[C]
     timers*: HeapQueue[EvqTimer]
-    ios*: Table[uint64, EvqIo]
-    ioIdx*: uint64
+    ios*: Table[SocketHandle, EvqIo]
 
   Conn* = ref object
     evq*: Evq

@@ -7,7 +7,6 @@ import posix
 import types
 import evq
 
-
 proc listen*(evq: Evq, port: int): Conn =
   var sa: Sockaddr_in6
   sa.sin6_family = AF_INET6.uint16

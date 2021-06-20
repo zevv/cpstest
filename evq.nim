@@ -28,9 +28,8 @@ proc push*(evq: Evq, c: C) =
 
 proc iowait*(c: C, conn: Conn, events: int): C {.cpsMagic.} =
   ## Suspend continuation until I/O event triggered
-  inc c.evq.ioIdx
-  c.evq.ios[c.evq.ioIdx] = EvqIo(fd: conn.fd, c: c)
-  var ee = EpollEvent(events: events.uint32, data: EpollData(u64: c.evq.ioIdx))
+  c.evq.ios[conn.fd] = EvqIo(fd: conn.fd, c: c)
+  var ee = EpollEvent(events: events.uint32, data: EpollData(u64: conn.fd.uint64))
   checkSyscall epoll_ctl(c.evq.epfd, EPOLL_CTL_ADD, conn.fd.cint, ee.addr)
 
 proc sleep*(c: C, delay: float): C {.cpsMagic.} =
@@ -64,9 +63,9 @@ proc run*(evq: Evq) =
 
     # Move triggered I/O continuations to the work queue
     for i in 0..<n:
-      let idx = es[i].data.u64
-      let io = evq.ios[idx]
+      let fd = es[i].data.u64.SocketHandle
+      let io = evq.ios[fd]
       checkSyscall epoll_ctl(evq.epfd, EPOLL_CTL_DEL, io.fd.cint, nil)
-      evq.ios.del idx
+      evq.ios.del fd
       evq.push io.c
 
