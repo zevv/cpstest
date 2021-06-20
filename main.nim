@@ -12,8 +12,7 @@ proc doClient(conn: Conn) {.cps:C.} =
   echo "connected"
 
   while true:
-    conn.recv(1024 * 1024)
-    let s = conn.s
+    let s = conn.recv(1024 * 1024)
     if s.len == 0:
       break
     conn.sendFull(s)

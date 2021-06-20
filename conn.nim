@@ -44,12 +44,12 @@ proc send*(conn: Conn, s: string): int {.cps:C.} =
   let r = posix.send(conn.fd, s[0].unsafeAddr, s.len, 0)
   return r
 
-proc recv*(conn: Conn, n: int) {.cps:C.} =
+proc recv*(conn: Conn, n: int): string {.cps:C.} =
   var s = newString(n)
   iowait(conn, POLLIN)
   let r = posix.recv(conn.fd, s[0].addr, n, 0)
   s.setLen if r > 0: r else: 0
-  conn.s = s
+  s
 
 proc sendFull*(conn: Conn, s: string) {.cps:C.} =
   var done = 0
@@ -62,16 +62,16 @@ proc sendFull*(conn: Conn, s: string) {.cps:C.} =
     done += r
     todo -= r
 
-proc recvFull*(conn: Conn, n: int) {.cps:C.} =
-  var todo = n
-  var s = newString(n)
-  while todo > 0:
-    conn.recv(todo)
-    if conn.s.len == 0:
-      break
-    s.add conn.s
-    todo -= conn.s.len
-  conn.s = s
+#proc recvFull*(conn: Conn, n: int) {.cps:C.} =
+#  var todo = n
+#  var s = newString(n)
+#  while todo > 0:
+#    conn.recv(todo)
+#    if conn.s.len == 0:
+#      break
+#    s.add conn.s
+#    todo -= conn.s.len
+#  conn.s = s
 
 proc close*(conn: Conn) =
   checkSyscall posix.close(conn.fd)
