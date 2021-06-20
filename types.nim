@@ -28,11 +28,6 @@ type
     timers*: HeapQueue[EvqTimer]
     ios*: Table[SocketHandle, EvqIo]
 
-  Conn* = ref object
-    evq*: Evq
-    fd*: SocketHandle
-    s*: string
-
 proc pass*(cFrom, cTo: C): C =
   cTo.evq = cFrom.evq
   cTo

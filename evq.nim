@@ -26,7 +26,7 @@ proc push*(evq: Evq, c: C) =
   c.evq = evq
   evq.work.addLast c
 
-proc iowait*(c: C, conn: Conn, events: int): C {.cpsMagic.} =
+proc iowait*[T](c: C, conn: T, events: int): C {.cpsMagic.} =
   ## Suspend continuation until I/O event triggered
   c.evq.ios[conn.fd] = EvqIo(fd: conn.fd, c: c)
   var ee = EpollEvent(events: events.uint32, data: EpollData(u64: conn.fd.uint64))
