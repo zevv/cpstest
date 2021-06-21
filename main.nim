@@ -24,6 +24,7 @@ type
   HttpResponse = ref object
     body: string
     keepAlive: bool
+    headers: Table[string, string] # yeah yeah
 
 
 proc parseHttpRequest(br: Breader, req: HttpRequest) {.cps:C.} =
@@ -53,9 +54,14 @@ proc parseHttpRequest(br: Breader, req: HttpRequest) {.cps:C.} =
 proc writeHttpResponse(bw: Bwriter, rsp: HttpResponse) {.cps:C.} =
   bw.write("HTTP/1.1 200 OK\r\n")
   bw.write("Content-Type: text/plain\r\n")
-  bw.write(&"Content-Length: {rsp.body.len}\r\n")
+  if rsp.body.len > 0:
+    bw.write(&"Content-Length: {rsp.body.len}\r\n")
   if rsp.keepAlive:
     bw.write("Connection: Keep-Alive\r\n")
+  var hs = ""
+  for k, v in rsp.headers:
+    hs.add k & ": " & v & "\r\n"
+  bw.write(hs)
   bw.write("\r\n")
   bw.write(rsp.body)
   bw.flush()
@@ -73,9 +79,10 @@ proc handleHttp(br: Breader, bw: Bwriter) {.cps:C.} =
     return
 
   let rsp = HttpResponse(
-    body: readFile("/etc/services"),
+    body: "Hello, world!",
     keepAlive: req.keepAlive,
   )
+  rsp.headers["X-Foo"] = "Bar"
 
   writeHttpResponse(bw, rsp)
  
