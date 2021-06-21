@@ -81,5 +81,9 @@ proc recvFull*(conn: Conn, n: int) {.cps:C.} =
   conn.s = s
 
 proc close*(conn: Conn) =
-  checkSyscall posix.close(conn.fd)
+  if conn.fd != -1.SocketHandle:
+    checkSyscall posix.close(conn.fd)
+    conn.fd = -1.SocketHandle
+
+
 

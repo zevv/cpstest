@@ -6,19 +6,90 @@ import cps
 import types
 import evq
 import conn
+import bconn
+import strutils
+import tables
+import strformat
 
+
+type
+  HttpRequest = ref object
+    meth: string
+    path: string
+    proto: string
+    keepAlive: bool
+    contentLength: int
+    headers: Table[string, string] # yeah yeah
+
+  HttpResponse = ref object
+    body: string
+    keepAlive: bool
+
+
+proc parseHttpRequest(br: Breader, req: HttpRequest) {.cps:C.} =
+
+  # Get request line
+  br.readLine()
+  if br.line == "": return
+  let ps = splitWhitespace(br.line)
+  (req.meth, req.path, req.proto) = (ps[0], ps[1], ps[2])
+
+  # Get all headers
+  while true:
+    br.readLine()
+    if br.line.len() == 0:
+      break
+    let ps = br.line.split(": ", 2)
+    if ps.len == 2:
+      req.headers[ps[0].toLower] = ps[1]
+  
+  req.keepAlive = req.headers.getOrDefault("connection") == "Keep-Alive"
+  req.contentLength = parseInt(req.headers.getOrDefault("content-length", "0"))
+ 
+  # Read payload
+  br.read(req.contentLength)
+
+
+proc writeHttpResponse(bw: Bwriter, rsp: HttpResponse) {.cps:C.} =
+  bw.write("HTTP/1.1 200 OK\r\n")
+  bw.write("Content-Type: text/plain\r\n")
+  bw.write(&"Content-Length: {rsp.body.len}\r\n")
+  if rsp.keepAlive:
+    bw.write("Connection: Keep-Alive\r\n")
+  bw.write("\r\n")
+  bw.write(rsp.body)
+  bw.flush()
+
+  if not rsp.keepAlive:
+    bw.close()
+
+
+proc handleHttp(br: Breader, bw: Bwriter) {.cps:C.} =
+
+  let req = HttpRequest()
+  parseHttpRequest(br, req)
+
+  if req.meth == "":
+    return
+
+  let rsp = HttpResponse(
+    body: readFile("/etc/services"),
+    keepAlive: req.keepAlive,
+  )
+
+  writeHttpResponse(bw, rsp)
+ 
 
 proc doClient(conn: Conn) {.cps:C.} =
-  echo "connected"
+  #echo "connected"
 
-  while true:
-    conn.recv(1024 * 1024)
-    let s = conn.s
-    if s.len == 0:
-      break
-    conn.sendFull(s)
+  let br = newBreader(conn)
+  let bw = newBwriter(conn)
 
-  echo "disconnected"
+  while not br.eof and not bw.eof:
+    handleHttp(br, bw)
+
+  #echo "disconnected"
   conn.close()
 
 

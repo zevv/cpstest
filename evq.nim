@@ -23,17 +23,23 @@ template `<`(a, b: EvqTimer): bool =
 
 proc push*(evq: Evq, c: C) =
   ## Push work to the back of the work queue
+  assert c != nil
+  assert evq != nil
   c.evq = evq
   evq.work.addLast c
 
 proc iowait*[T](c: C, conn: T, events: int): C {.cpsMagic.} =
   ## Suspend continuation until I/O event triggered
+  assert c != nil
+  assert c.evq != nil
   c.evq.ios[conn.fd] = EvqIo(fd: conn.fd, c: c)
   var ee = EpollEvent(events: events.uint32, data: EpollData(u64: conn.fd.uint64))
   checkSyscall epoll_ctl(c.evq.epfd, EPOLL_CTL_ADD, conn.fd.cint, ee.addr)
 
 proc sleep*(c: C, delay: float): C {.cpsMagic.} =
   ## Suspend continuation until timer expires
+  assert c != nil
+  assert c.evq != nil
   c.evq.timers.push EvqTimer(c: c, time: c.evq.now + delay)
 
 proc run*(evq: Evq) =

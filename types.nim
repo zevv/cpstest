@@ -29,6 +29,8 @@ type
     ios*: Table[SocketHandle, EvqIo]
 
 proc pass*(cFrom, cTo: C): C =
+  assert cFrom != nil
+  assert cTo != nil
   cTo.evq = cFrom.evq
   cTo
 
