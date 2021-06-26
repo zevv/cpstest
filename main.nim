@@ -9,13 +9,13 @@ import cps
 
 import types
 import evq
-import conn
+include conn
 import bconn
 import httpserver
 
 
 proc ticker(evq: Evq) {.cps:C.} =
-  let client = conn.dial(evq, "localhost", 8080)
+  let client = dial(evq, "localhost", 8080)
   while true:
     echo "tick"
     sleep(1.0)

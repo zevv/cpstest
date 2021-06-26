@@ -19,30 +19,35 @@ proc listen*(evq: Evq, port: int): Conn =
   sa.sin6_port = htons(port.uint16)
   sa.sin6_addr = in6addr_any
   var yes: int = 1
-  let fd = socket(AF_INET6, SOCK_STREAM, 0);
+  let fd = socket(AF_INET6, SOCK_STREAM or O_NONBLOCK, 0);
   checkSyscall setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, yes.addr, sizeof(yes).SockLen)
   checkSyscall bindSocket(fd, cast[ptr SockAddr](sa.addr), sizeof(sa).SockLen)
   checkSyscall listen(fd, SOMAXCONN)
   return Conn(evq: evq, fd: fd)
 
-proc dial*(evq: Evq, ip: string, port: int): Conn =
+proc dial*(evq: Evq, ip: string, port: int): Conn {.cps:C.}=
   var res: ptr AddrInfo
   var hints: AddrInfo
   hints.ai_family = AF_UNSPEC
   hints.ai_socktype = SOCK_STREAM
   let r = getaddrinfo(ip, $port, hints.addr, res)
-  if r == 0:
-    let fd = socket(res.ai_family, res.ai_socktype, 0)
-    checkSyscall connect(fd, res.ai_addr, res.ai_addrlen)
-    freeaddrinfo(res)
-    Conn(evq: evq, fd: fd)
-  else:
+  if r != 0:
     raise newException(OSError, "dial: " & $gai_strerror(r))
+  let fd = socket(res.ai_family, res.ai_socktype or O_NONBLOCK, 0)
+  var rc = connect(fd, res.ai_addr, res.ai_addrlen)
+  freeaddrinfo(res)
+  if rc == EINPROGRESS:
+    iowait(fd, POLLOUT)
+    var e: cint
+    var s = SockLen sizeof(e)
+    echo getsockopt(fd, SOL_SOCKET, SO_ERROR, addr(e), addr(s)) == 0'i32
+  Conn(evq: evq, fd: fd)
 
 proc accept*(conn: Conn): Conn =
   var sa: Sockaddr_in6
   var saLen: SockLen
   let fd = posix.accept4(conn.fd, cast[ptr SockAddr](sa.addr), saLen.addr, O_NONBLOCK)
+  echo "Accepted"
   Conn(fd: fd, evq: conn.evq)
 
 proc send*(conn: Conn, s: string): int {.cps:C.} =
