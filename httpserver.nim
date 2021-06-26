@@ -5,10 +5,10 @@ import cps
 
 import types
 import evq
-import bconn
 import strutils
 import tables
 import strformat
+include bconn
 
 
 type
@@ -29,17 +29,17 @@ type
 proc parseRequest(br: Breader, req: Request) {.cps:C.} =
 
   # Get request line
-  br.readLine()
-  if br.line == "": return
-  let ps = splitWhitespace(br.line)
+  let line = br.readLine()
+  if line == "": return
+  let ps = splitWhitespace(line)
   (req.meth, req.path, req.proto) = (ps[0], ps[1], ps[2])
 
   # Get all headers
   while true:
-    br.readLine()
-    if br.line.len() == 0:
+    let line = br.readLine()
+    if line.len() == 0:
       break
-    let ps = br.line.split(": ", 2)
+    let ps = line.split(": ", 2)
     if ps.len == 2:
       req.headers[ps[0].toLower] = ps[1]
   
@@ -47,7 +47,7 @@ proc parseRequest(br: Breader, req: Request) {.cps:C.} =
   req.contentLength = parseInt(req.headers.getOrDefault("content-length", "0"))
  
   # Read payload
-  br.read(req.contentLength)
+  let body = br.read(req.contentLength)
 
 
 proc writeResponse(bw: Bwriter, rsp: Response) {.cps:C.} =

@@ -11,7 +11,6 @@ type
     conn: Conn
     buf: string
     bufSize: int
-    line*: string
     eof*: bool
 
 
@@ -28,25 +27,26 @@ proc fill(br: Breader, n: int) {.cps:C.} =
   else:
     br.eof = true
 
-proc read*(br: Breader, n: int) {.cps:C.} =
+proc read*(br: Breader, n: int): string {.cps:C.} =
   ## Read exactly `n` bytes
   while br.buf.len < n:
     br.fill(n - br.buf.len)
-  br.line = br.buf
+  result = br.buf
   br.buf = ""
 
 
-proc readLine*(br: Breader) {.cps:C.} =
+proc readLine*(br: Breader): string {.cps:C.} =
   ## Read up to the first newline
   while true:
     let off = br.buf.find('\n')
     if off >= 0:
-      br.line = br.buf[0..<off]
+      result = br.buf[0..<off]
       br.buf = br.buf[off+1..^1]
-      if br.line[^1] == '\r':
-        br.line.setLen(br.line.len-1)
+      if result[^1] == '\r':
+        result.setLen(result.len-1)
       return
-    br.fill br.bufSize
+    else:
+      br.fill br.bufSize
 
 
 
