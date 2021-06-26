@@ -3,7 +3,7 @@
 
 import cps
 import types
-import conn
+include conn
 
 type
 
@@ -22,9 +22,10 @@ proc newBreader*(conn: Conn, size: int = 4096): Breader =
   )
 
 proc fill(br: Breader, n: int) {.cps:C.} =
-  br.conn.recv(n)
-  br.buf.add br.conn.s
-  if br.conn.s.len == 0:
+  let s = br.conn.recv(n)
+  if s.len > 0:
+    br.buf.add s
+  else:
     br.eof = true
 
 proc read*(br: Breader, n: int) {.cps:C.} =
@@ -46,9 +47,6 @@ proc readLine*(br: Breader) {.cps:C.} =
         br.line.setLen(br.line.len-1)
       return
     br.fill br.bufSize
-    if br.conn.s.len == 0:
-      br.line = ""
-      return 
 
 
 
@@ -69,8 +67,8 @@ proc newBwriter*(conn: Conn, size: int = 4096): Bwriter =
 
 proc flush*(bw: Bwriter) {.cps:C.} =
   ## Flush writer buffer
-  bw.conn.sendFull(bw.buf)
-  bw.buf.setLen(0)
+  let n = bw.conn.send(bw.buf)
+  bw.buf = bw.buf[n..^1]
 
 proc write*(bw: Bwriter, buf: string) {.cps:C.} =
   ## Write string

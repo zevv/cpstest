@@ -15,7 +15,7 @@ import httpserver
 
 
 proc ticker(evq: Evq) {.cps:C.} =
-  let conn = dial(evq, "localhost", 8080)
+  let client = conn.dial(evq, "localhost", 8080)
   while true:
     echo "tick"
     sleep(1.0)

@@ -5,7 +5,6 @@ import cps
 
 import types
 import evq
-import conn
 import bconn
 import strutils
 import tables
