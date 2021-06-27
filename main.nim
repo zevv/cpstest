@@ -11,7 +11,7 @@ import types
 import evq
 import conn
 import bconn
-import httpserver
+#import httpserver
 import httpclient
 
 
@@ -25,7 +25,7 @@ proc ticker(evq: Evq) {.cps:C.} =
 
 var myevq = newEvq()
 
-myevq.push whelp httpserver.listenAndServe(myevq, 8080)
+#myevq.push whelp httpserver.listenAndServe(myevq, 8080)
 myevq.push whelp ticker(myevq)
 
 myevq.run()
