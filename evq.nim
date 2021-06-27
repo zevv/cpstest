@@ -32,7 +32,6 @@ proc push*(evq: Evq, c: C) =
 
 proc iowait*[T](c: C, conn: T, events: int): C {.cpsMagic.} =
   ## Suspend continuation until I/O event triggered
-  echo "iowait1"
   assert c != nil
   assert c.evq != nil
   c.evq.ios[conn.fd] = EvqIo(fd: conn.fd, c: c)

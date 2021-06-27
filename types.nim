@@ -30,11 +30,13 @@ type
     ios*: Table[SocketHandle, EvqIo]
     name*: string
 
-proc trace*(c: C, what: string, info: LineInfo) =
+proc trace2*(c: C, what: string, info: LineInfo) =
   echo "trace ", what, " ", info
 
+proc dumpEvq*(c: C, what: string) {.cpsVoodoo.} =
+  echo what, ": ", c.evq.name
+
 proc pass*(cFrom, cTo: C): C =
-  echo "pass"
   assert cFrom != nil
   assert cTo != nil
   cTo.evq = cFrom.evq

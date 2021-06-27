@@ -10,6 +10,7 @@ import tables
 import strformat
 import conn
 import bconn
+import http
 
 
 type
@@ -19,32 +20,25 @@ type
     proto: string
     keepAlive: bool
     contentLength: int
-    headers: Table[string, string] # yeah yeah
+    headers: Headers
 
   Response* = ref object
     body: string
     keepAlive: bool
-    headers: Table[string, string] # yeah yeah
+    headers: Headers
 
 
-proc parse(req: Request, br: Breader) {.cps:C.} =
+proc read(req: Request, br: Breader) {.cps:C.} =
 
   # Get request line
   let line = br.readLine()
   if line == "":
     br.close()
     return
-  let ps = splitWhitespace(line)
+  let ps = splitWhitespace(line, 3)
   (req.meth, req.path, req.proto) = (ps[0], ps[1], ps[2])
 
-  # Get all headers
-  while true:
-    let line = br.readLine()
-    if line.len() == 0:
-      break
-    let ps = line.split(": ", 2)
-    if ps.len == 2:
-      req.headers[ps[0].toLower] = ps[1]
+  req.headers.read(br)
   
   req.keepAlive = req.headers.getOrDefault("connection") == "Keep-Alive"
   req.contentLength = parseInt(req.headers.getOrDefault("content-length", "0"))
@@ -60,11 +54,7 @@ proc write(rsp: Response, bw: Bwriter) {.cps:C.} =
     bw.write(&"Content-Length: {rsp.body.len}\r\n")
   if rsp.keepAlive:
     bw.write("Connection: Keep-Alive\r\n")
-  var hs = ""
-  for k, v in rsp.headers:
-    hs.add k & ": " & v & "\r\n"
-  bw.write(hs)
-  bw.write("\r\n")
+  rsp.headers.write(bw)
   bw.write(rsp.body)
   bw.flush()
 
@@ -72,21 +62,30 @@ proc write(rsp: Response, bw: Bwriter) {.cps:C.} =
     bw.close()
 
 
+proc newRequest(): Request {.cps:C.} =
+  Request(
+    headers: Headers()
+  )
+
+proc newResponse(): Response {.cps:C.} =
+  Response(
+    headers: Headers()
+  )
+
 proc onRequest(req: Request, rsp: Response) {.cps:C.} =
   discard
 
 proc handleHttp(br: Breader, bw: Bwriter) {.cps:C.} =
 
-  let req = Request()
-  req.parse(br)
+  let req = newRequest()
+  req.read(br)
 
   if req.meth == "":
     return
 
-  let rsp = Response(
-    body: "Hello, world!",
-    keepAlive: req.keepAlive,
-  )
+  let rsp = newResponse()
+  rsp.body = "Hello, world!"
+  rsp.keepAlive = req.keepAlive
 
   onRequest(req, rsp)
   rsp.write(bw)

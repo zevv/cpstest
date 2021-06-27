@@ -9,11 +9,10 @@ import evq
 
 type
   Conn* = ref object
-    evq*: Evq
     fd*: SocketHandle
 
 
-proc listen*(evq: Evq, port: int): Conn =
+proc listen*(port: int): Conn =
   var sa: Sockaddr_in6
   sa.sin6_family = AF_INET6.uint16
   sa.sin6_port = htons(port.uint16)
@@ -23,9 +22,9 @@ proc listen*(evq: Evq, port: int): Conn =
   checkSyscall setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, yes.addr, sizeof(yes).SockLen)
   checkSyscall bindSocket(fd, cast[ptr SockAddr](sa.addr), sizeof(sa).SockLen)
   checkSyscall listen(fd, SOMAXCONN)
-  return Conn(evq: evq, fd: fd)
+  return Conn(fd: fd)
 
-proc dial*(evq: Evq, host: string, port: int): Conn {.cps:C.}=
+proc dial*(host: string, port: int): Conn {.cps:C.}=
   # Resolve address
   var res: ptr AddrInfo
   var hints: AddrInfo
@@ -37,7 +36,7 @@ proc dial*(evq: Evq, host: string, port: int): Conn {.cps:C.}=
 
 # Create non-blocking socket and try to connect
   let fd = socket(res.ai_family, res.ai_socktype or O_NONBLOCK, 0)
-  let conn = Conn(evq: evq, fd: fd)
+  let conn = Conn(fd: fd)
   var rc = connect(fd, res.ai_addr, res.ai_addrlen)
   freeaddrinfo(res)
 
@@ -54,20 +53,16 @@ proc accept*(conn: Conn): Conn =
   var sa: Sockaddr_in6
   var saLen: SockLen
   let fd = posix.accept4(conn.fd, cast[ptr SockAddr](sa.addr), saLen.addr, O_NONBLOCK)
-  Conn(fd: fd, evq: conn.evq)
+  Conn(fd: fd)
 
 proc send*(conn: Conn, s: string): int {.cps:C.} =
-  echo "send1"
   iowait(conn, POLLOUT)
-  echo "send2"
   let r = posix.send(conn.fd, s[0].unsafeAddr, s.len, 0)
   return r
 
 proc recv*(conn: Conn, n: int): string {.cps:C.} =
   var s = newString(n)
-  echo "recv1"
   iowait(conn, POLLIN)
-  echo "recv2"
   let r = posix.recv(conn.fd, s[0].addr, n, 0)
   s.setLen if r > 0: r else: 0
   return s
