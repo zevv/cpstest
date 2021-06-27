@@ -10,7 +10,7 @@ import types
 
 type
   Headers* = ref object
-    headers*: Table[string, string]
+    headers*: Table[string, seq[string]]
   
   Request* = ref object
     meth*: string
@@ -30,6 +30,11 @@ type
 # Headers
 #
 
+proc add*(headers: Headers, key: string, val: string) =
+  if key notin headers.headers:
+    headers.headers[key] = @[]
+  headers.headers[key].add val
+
 proc read*(headers: Headers, br: Breader) {.cps:C.} =
   while true:
     let line = br.readLine()
@@ -37,18 +42,19 @@ proc read*(headers: Headers, br: Breader) {.cps:C.} =
       break
     let ps = line.split(": ", 2)
     if ps.len == 2:
-      headers.headers[ps[0].toLower] = ps[1]
+      headers.add(ps[0].toLower, ps[1])
 
 proc `$`*(headers: Headers): string =
-  for k, v in headers.headers:
-    result.add k & ": " & v & "\n"
+  for k, vs in headers.headers:
+    for v in vs:
+      result.add k & ": " & v & "\r\n"
   result.add "\r\n"
 
 proc getOrDefault*(headers: Headers, key: string, def: string): string =
-  headers.headers.getOrDefault(key, def)
-
-proc add*(headers: Headers, key: string, val: string) =
-  headers.headers[key] = val
+  if key in headers.headers:
+    headers.headers[key][0]
+  else:
+    def
 
 
 #
@@ -93,7 +99,6 @@ proc read*(req: Request, br: Breader) {.cps:C.} =
 
 proc write*(req: Request, bw: BWriter) {.cps:C.} =
   bw.write($req)
-  bw.flush()
 
 
 #
@@ -107,7 +112,7 @@ proc newResponse*(): Response =
   )
 
 proc `$`*(rsp: Response): string =
-  result.add("HTTP/1.1 200 OK\r\n")
+  result.add("HTTP/1.0 " & $rsp.statuscode & " OK\r\n")
   result.add("Content-Type: text/plain\r\n")
   if rsp.contentLength > 0:
     result.add("Content-Length: " & $rsp.contentLength & "\r\n")
@@ -125,4 +130,3 @@ proc read*(rsp: Response, br: BReader) {.cps:C.}=
 
 proc write*(rsp: Response, bw: Bwriter) {.cps:C.} =
   bw.write $rsp
-  bw.flush()

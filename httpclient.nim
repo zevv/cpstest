@@ -22,12 +22,15 @@ proc newClient*(): Client =
 
 
 proc doRequest*(meth: string, client: Client, url: string): Response {.cps:C.} =
+  # Request
   let req = newRequest(meth, url)
   let conn = conn.dial(req.uri.hostname, 80)
   let bw = newBwriter(conn)
   let br = newBreader(conn)
   req.write(bw)
-  echo req
+  bw.flush()
+
+  # Response
   var rsp = newResponse()
   rsp.read(br)
   

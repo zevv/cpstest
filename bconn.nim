@@ -50,6 +50,7 @@ proc readLine*(br: Breader): string {.cps:C.} =
 
 proc close*(br: Breader) {.cps:C.} =
   br.conn.close()
+  br.eof = true
 
 type
 
