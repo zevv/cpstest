@@ -13,10 +13,8 @@ import bconn
 import http
 
 
+let body = "Hello, world!"
 
-
-proc onRequest(req: Request, rsp: Response) {.cps:C.} =
-  discard
 
 proc handleHttp(br: Breader, bw: Bwriter) {.cps:C.} =
 
@@ -25,25 +23,30 @@ proc handleHttp(br: Breader, bw: Bwriter) {.cps:C.} =
 
   if req.meth == "":
     return
-
-  let rsp = newResponse()
-  rsp.body = "Hello, world!"
-  rsp.keepAlive = req.keepAlive
-
-  onRequest(req, rsp)
-  rsp.write(bw)
+  
+  echo req
+  if req.contentLength > 0:
+    let reqBody = br.read(req.contentLength)
+    echo reqBody
  
+  echo "-------"
+  let rsp = newResponse()
+  rsp.contentLength = body.len
+  rsp.keepAlive = req.keepAlive
+  echo rsp
 
+  rsp.write(bw)
+  if rsp.contentLength > 0:
+    bw.write(body)
+    bw.flush()
+
+  echo "-------"
+ 
 proc doClient(conn: Conn) {.cps:C.} =
-  #echo "connected"
-
   let br = newBreader(conn)
   let bw = newBwriter(conn)
-
   while not br.eof and not bw.eof:
     handleHttp(br, bw)
-
-  #echo "disconnected"
   conn.close()
 
 

@@ -2,7 +2,6 @@
 import tables
 import strutils
 import std/uri
-import strformat
 
 import cps
 
@@ -24,8 +23,8 @@ type
     headers*: Headers
     statusCode*: int
     statusMessage*: string
+    contentLength*: int
     keepAlive*: bool
-    body*: string
 
 #
 # Headers
@@ -43,10 +42,7 @@ proc read*(headers: Headers, br: Breader) {.cps:C.} =
 proc `$`*(headers: Headers): string =
   for k, v in headers.headers:
     result.add k & ": " & v & "\n"
-
-proc write*(headers: Headers, bw: Bwriter) {.cps:C.} =
-  bw.write $headers
-  bw.write("\r\n")
+  result.add "\r\n"
 
 proc getOrDefault*(headers: Headers, key: string, def: string): string =
   headers.headers.getOrDefault(key, def)
@@ -74,11 +70,8 @@ proc `$`*(req: Request): string =
   if req.uri.query.len > 0:
     result.add("?" & req.uri.query)
   result.add $req.headers
-  result.add "\r\n"
 
 proc read*(req: Request, br: Breader) {.cps:C.} =
-
-  # Get request line
   let line = br.readLine()
   if line == "":
     br.close()
@@ -86,6 +79,7 @@ proc read*(req: Request, br: Breader) {.cps:C.} =
   let ps = splitWhitespace(line, 3)
   let (meth, trailer, proto) = (ps[0], ps[1], ps[2])
 
+  req.meth = meth
   req.headers.read(br)
   
   req.keepAlive = req.headers.getOrDefault("connection", "Close") == "Keep-Alive"
@@ -93,10 +87,6 @@ proc read*(req: Request, br: Breader) {.cps:C.} =
   let host = req.headers.getOrDefault("host", "")
   
   parseUri("http://" & host & trailer, req.uri)
-  echo req.uri
- 
-  # Read payload
-  let body = br.read(req.contentLength)
 
 proc write*(req: Request, bw: BWriter) {.cps:C.} =
   bw.write($req)
@@ -110,21 +100,20 @@ proc write*(req: Request, bw: BWriter) {.cps:C.} =
 proc newResponse*(): Response =
   result = Response(
     headers: http.Headers(),
+    contentLength: -1,
   )
 
 proc `$`*(rsp: Response): string =
   result.add("HTTP/1.1 200 OK\r\n")
   result.add("Content-Type: text/plain\r\n")
-  if rsp.body.len > 0:
-    result.add(&"Content-Length: {rsp.body.len}\r\n")
+  if rsp.contentLength > 0:
+    result.add("Content-Length: " & $rsp.contentLength & "\r\n")
   if rsp.keepAlive:
     result.add("Connection: Keep-Alive\r\n")
   result.add $rsp.headers
-  result.add "\r\n"
 
 proc read*(rsp: Response, br: BReader) {.cps:C.}=
   let line = br.readLine()
-  echo line
   
   let ps = splitWhitespace(line, 3)
   rsp.statusCode = parseInt(ps[1])
@@ -133,11 +122,4 @@ proc read*(rsp: Response, br: BReader) {.cps:C.}=
 
 proc write*(rsp: Response, bw: Bwriter) {.cps:C.} =
   bw.write $rsp
-  rsp.headers.write(bw)
-  bw.write(rsp.body)
   bw.flush()
-
-  if not rsp.keepAlive:
-    bw.close()
-
-

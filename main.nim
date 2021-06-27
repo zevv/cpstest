@@ -1,16 +1,11 @@
 
 # Main program
 
-import strutils
-import tables
-import strformat
-
 import cps
 
 import types
 import evq
-import conn
-import bconn
+import http
 import httpserver
 import httpclient
 
@@ -18,6 +13,7 @@ import httpclient
 proc ticker() {.cps:C.} =
   let client = httpClient.newClient()
   let rsp = client.get("http://zevv.nl/")
+  echo rsp
   while true:
     echo "tick"
     sleep(1.0)

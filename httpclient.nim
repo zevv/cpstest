@@ -27,9 +27,9 @@ proc doRequest*(meth: string, client: Client, url: string): Response {.cps:C.} =
   let bw = newBwriter(conn)
   let br = newBreader(conn)
   req.write(bw)
+  echo req
   var rsp = newResponse()
   rsp.read(br)
-  echo $rsp
   
   return rsp
   
