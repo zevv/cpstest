@@ -57,13 +57,17 @@ proc accept*(conn: Conn): Conn =
   Conn(fd: fd, evq: conn.evq)
 
 proc send*(conn: Conn, s: string): int {.cps:C.} =
+  echo "send1"
   iowait(conn, POLLOUT)
+  echo "send2"
   let r = posix.send(conn.fd, s[0].unsafeAddr, s.len, 0)
   return r
 
 proc recv*(conn: Conn, n: int): string {.cps:C.} =
   var s = newString(n)
+  echo "recv1"
   iowait(conn, POLLIN)
+  echo "recv2"
   let r = posix.recv(conn.fd, s[0].addr, n, 0)
   s.setLen if r > 0: r else: 0
   return s

@@ -17,6 +17,7 @@ proc newEvq*(): Evq =
   Evq(
     now: getMonoTime().ticks.float / 1.0e9,
     epfd: epoll_create(1),
+    name: "Lebowski",
   )
 
 template `<`(a, b: EvqTimer): bool =
@@ -31,6 +32,7 @@ proc push*(evq: Evq, c: C) =
 
 proc iowait*[T](c: C, conn: T, events: int): C {.cpsMagic.} =
   ## Suspend continuation until I/O event triggered
+  echo "iowait1"
   assert c != nil
   assert c.evq != nil
   c.evq.ios[conn.fd] = EvqIo(fd: conn.fd, c: c)

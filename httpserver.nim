@@ -27,7 +27,7 @@ type
     headers: Table[string, string] # yeah yeah
 
 
-proc parseRequest(br: Breader, req: Request) {.cps:C.} =
+proc parse(req: Request, br: Breader) {.cps:C.} =
 
   # Get request line
   let line = br.readLine()
@@ -53,7 +53,7 @@ proc parseRequest(br: Breader, req: Request) {.cps:C.} =
   let body = br.read(req.contentLength)
 
 
-proc writeResponse(bw: Bwriter, rsp: Response) {.cps:C.} =
+proc write(rsp: Response, bw: Bwriter) {.cps:C.} =
   bw.write("HTTP/1.1 200 OK\r\n")
   bw.write("Content-Type: text/plain\r\n")
   if rsp.body.len > 0:
@@ -78,7 +78,7 @@ proc onRequest(req: Request, rsp: Response) {.cps:C.} =
 proc handleHttp(br: Breader, bw: Bwriter) {.cps:C.} =
 
   let req = Request()
-  parseRequest(br, req)
+  req.parse(br)
 
   if req.meth == "":
     return
@@ -89,8 +89,7 @@ proc handleHttp(br: Breader, bw: Bwriter) {.cps:C.} =
   )
 
   onRequest(req, rsp)
-
-  writeResponse(bw, rsp)
+  rsp.write(bw)
  
 
 proc doClient(conn: Conn) {.cps:C.} =

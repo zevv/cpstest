@@ -6,6 +6,7 @@ import tables
 import heapqueue
 import posix
 import deques
+import macros
 
 export POLLIN, POLLOUT
 
@@ -27,8 +28,13 @@ type
     work*: Deque[C]
     timers*: HeapQueue[EvqTimer]
     ios*: Table[SocketHandle, EvqIo]
+    name*: string
+
+proc trace*(c: C, what: string, info: LineInfo) =
+  echo "trace ", what, " ", info
 
 proc pass*(cFrom, cTo: C): C =
+  echo "pass"
   assert cFrom != nil
   assert cTo != nil
   cTo.evq = cFrom.evq
