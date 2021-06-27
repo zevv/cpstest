@@ -47,6 +47,9 @@ proc `$`*(headers: Headers): string =
 proc getOrDefault*(headers: Headers, key: string, def: string): string =
   headers.headers.getOrDefault(key, def)
 
+proc add*(headers: Headers, key: string, val: string) =
+  headers.headers[key] = val
+
 
 #
 # Request

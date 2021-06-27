@@ -3,6 +3,7 @@ import strutils
 import tables
 import std/uri
 import strformat
+import times
 
 import cps
 
@@ -24,23 +25,20 @@ proc handleHttp(br: Breader, bw: Bwriter) {.cps:C.} =
   if req.meth == "":
     return
   
-  echo req
   if req.contentLength > 0:
     let reqBody = br.read(req.contentLength)
-    echo reqBody
+                  
+  let date = now().utc().format("ddd, dd MMM yyyy HH:mm:ss 'GMT'")
  
-  echo "-------"
   let rsp = newResponse()
   rsp.contentLength = body.len
   rsp.keepAlive = req.keepAlive
-  echo rsp
+  rsp.headers.add("Date", date)
 
   rsp.write(bw)
   if rsp.contentLength > 0:
     bw.write(body)
     bw.flush()
-
-  echo "-------"
  
 proc doClient(conn: Conn) {.cps:C.} =
   let br = newBreader(conn)
