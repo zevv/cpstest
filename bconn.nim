@@ -29,7 +29,7 @@ proc fill(br: Breader, n: int) {.cps:C.} =
 
 proc read*(br: Breader, n: int): string {.cps:C.} =
   ## Read exactly `n` bytes
-  while br.buf.len < n:
+  while not br.eof and br.buf.len < n:
     br.fill(n - br.buf.len)
   result = br.buf
   br.buf = ""
@@ -37,7 +37,7 @@ proc read*(br: Breader, n: int): string {.cps:C.} =
 
 proc readLine*(br: Breader): string {.cps:C.} =
   ## Read up to the first newline
-  while true:
+  while not br.eof:
     let off = br.buf.find('\n')
     if off >= 0:
       result = br.buf[0..<off]
@@ -48,7 +48,8 @@ proc readLine*(br: Breader): string {.cps:C.} =
     else:
       br.fill br.bufSize
 
-
+proc close*(br: Breader) {.cps:C.} =
+  br.conn.close()
 
 type
 

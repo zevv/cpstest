@@ -31,7 +31,9 @@ proc parseRequest(br: Breader, req: Request) {.cps:C.} =
 
   # Get request line
   let line = br.readLine()
-  if line == "": return
+  if line == "":
+    br.close()
+    return
   let ps = splitWhitespace(line)
   (req.meth, req.path, req.proto) = (ps[0], ps[1], ps[2])
 
