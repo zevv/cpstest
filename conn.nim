@@ -25,29 +25,35 @@ proc listen*(evq: Evq, port: int): Conn =
   checkSyscall listen(fd, SOMAXCONN)
   return Conn(evq: evq, fd: fd)
 
-proc dial*(evq: Evq, ip: string, port: int): Conn {.cps:C.}=
+proc dial*(evq: Evq, host: string, port: int): Conn {.cps:C.}=
+  # Resolve address
   var res: ptr AddrInfo
   var hints: AddrInfo
   hints.ai_family = AF_UNSPEC
   hints.ai_socktype = SOCK_STREAM
-  let r = getaddrinfo(ip, $port, hints.addr, res)
+  let r = getaddrinfo(host, $port, hints.addr, res)
   if r != 0:
     raise newException(OSError, "dial: " & $gai_strerror(r))
+
+# Create non-blocking socket and try to connect
   let fd = socket(res.ai_family, res.ai_socktype or O_NONBLOCK, 0)
+  let conn = Conn(evq: evq, fd: fd)
   var rc = connect(fd, res.ai_addr, res.ai_addrlen)
   freeaddrinfo(res)
-  if rc == EINPROGRESS:
-    iowait(fd, POLLOUT)
+
+  # non-blocking connect: backoff until POLLOUT and get the result with getsockopt
+  if rc == -1 and errno == EINPROGRESS:
+    iowait(conn, POLLOUT)
     var e: cint
     var s = SockLen sizeof(e)
-    echo getsockopt(fd, SOL_SOCKET, SO_ERROR, addr(e), addr(s)) == 0'i32
-  Conn(evq: evq, fd: fd)
+    rc = getsockopt(fd, SOL_SOCKET, SO_ERROR, addr(e), addr(s))
+  checkSyscall rc
+  conn
 
 proc accept*(conn: Conn): Conn =
   var sa: Sockaddr_in6
   var saLen: SockLen
   let fd = posix.accept4(conn.fd, cast[ptr SockAddr](sa.addr), saLen.addr, O_NONBLOCK)
-  echo "Accepted"
   Conn(fd: fd, evq: conn.evq)
 
 proc send*(conn: Conn, s: string): int {.cps:C.} =
@@ -66,6 +72,3 @@ proc close*(conn: Conn) =
   if conn.fd != -1.SocketHandle:
     checkSyscall posix.close(conn.fd)
     conn.fd = -1.SocketHandle
-
-
-

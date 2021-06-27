@@ -3,7 +3,7 @@
 
 import cps
 import types
-include conn
+import conn
 
 type
 

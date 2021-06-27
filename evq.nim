@@ -8,6 +8,7 @@ import heapqueue
 import posix
 import std/monotimes
 import deques
+import os
 
 import types
 

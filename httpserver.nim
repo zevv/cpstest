@@ -8,7 +8,8 @@ import evq
 import strutils
 import tables
 import strformat
-include bconn
+import conn
+import bconn
 
 
 type
