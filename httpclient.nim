@@ -1,6 +1,4 @@
 
-import tables
-import strutils
 import std/uri
 
 import cps
