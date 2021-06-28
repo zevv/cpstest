@@ -34,7 +34,7 @@ proc dial*(host: string, port: int): Conn {.cps:C.}=
   if r != 0:
     raise newException(OSError, "dial: " & $gai_strerror(r))
 
-# Create non-blocking socket and try to connect
+  # Create non-blocking socket and try to connect
   let fd = socket(res.ai_family, res.ai_socktype or O_NONBLOCK, 0)
   let conn = Conn(fd: fd)
   var rc = connect(fd, res.ai_addr, res.ai_addrlen)
