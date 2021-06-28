@@ -1,13 +1,7 @@
 
-import times
-
+import std/[times]
 import cps
-
-import types
-import evq
-import conn
-import bconn
-import http
+import types, evq, conn, bconn, http
 
 let body = "hello\n"
 

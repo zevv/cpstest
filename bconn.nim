@@ -2,8 +2,7 @@
 # Buffered connections
 
 import cps
-import types
-import conn
+import types, conn
 
 type
 

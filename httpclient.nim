@@ -1,12 +1,7 @@
 
-import std/uri
-
+import std/[uri]
 import cps
-
-import bconn
-import types
-import conn
-import http
+import bconn, types, conn, http
 
 type
   Client = ref object

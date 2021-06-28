@@ -1,12 +1,7 @@
 
-import tables
-import strutils
-import std/uri
-
+import std/[tables,strutils,uri]
 import cps
-
-import bconn
-import types
+import bconn, types
 
 type
   Headers* = ref object

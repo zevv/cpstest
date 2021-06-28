@@ -2,12 +2,7 @@
 # Main program
 
 import cps
-
-import types
-import evq
-import http
-import httpserver
-import httpclient
+import types, evq, http, httpserver, httpclient
 
 
 proc ticker() {.cps:C.} =

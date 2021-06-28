@@ -1,11 +1,9 @@
 
 # Little async socket library
 
+import std/[posix]
 import cps
-import posix
-
-import types
-import evq
+import types, evq
 
 type
   Conn* = ref object

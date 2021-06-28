@@ -1,14 +1,9 @@
 
 # Minimal event queue implementation supporting a work queue, I/O and timers
 
-import cps
-import tables
-import epoll
-import heapqueue
-import posix
-import std/monotimes
-import deques
 
+import std/[tables,heapqueue,deques,posix,epoll,monotimes]
+import cps
 import types
 
 

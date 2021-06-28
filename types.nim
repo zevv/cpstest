@@ -1,12 +1,8 @@
 
 # Our types
 
+import std/[posix,deques,posix,heapqueue,tables,macros]
 import cps
-import tables
-import heapqueue
-import posix
-import deques
-import macros
 
 export POLLIN, POLLOUT
 
