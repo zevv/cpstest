@@ -25,6 +25,7 @@ proc push*(evq: Evq, c: C) =
   evq.work.addLast c
 
 proc jield*(c: C): C {.cpsMagic.} =
+  ## Suspend continuation until the next evq iteration - cooperative schedule
   c.evq.work.addLast c
 
 proc iowait*[T](c: C, conn: T, events: int): C {.cpsMagic.} =
@@ -42,12 +43,12 @@ proc sleep*(c: C, delay: float): C {.cpsMagic.} =
   c.evq.timers.push EvqTimer(c: c, time: c.evq.now + delay)
 
 proc getEvq*(c: C): Evq {.cpsVoodoo.} =
-  ## Retrieve current event queue
+  ## Retrieve event queue for the current contiunation
   c.evq
 
 proc run*(evq: Evq) =
-  ## Run the event queue
 
+  ## Run the event queue
   while true:
 
     # Trampoline all work
