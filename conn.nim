@@ -38,13 +38,16 @@ proc dial*(host: string, port: string): Conn {.cps:C.}=
   var rc = connect(fd, res.ai_addr, res.ai_addrlen)
   freeaddrinfo(res)
 
-  # non-blocking connect: backoff until POLLOUT and get the result with getsockopt
   if rc == -1 and errno == EINPROGRESS:
+    # non-blocking connect: backoff until POLLOUT and get the result with getsockopt
     iowait(conn, POLLOUT)
     var e: cint
     var s = SockLen sizeof(e)
-    rc = getsockopt(fd, SOL_SOCKET, SO_ERROR, addr(e), addr(s))
-  checkSyscall rc
+    checkSyscall getsockopt(fd, SOL_SOCKET, SO_ERROR, addr(e), addr(s))
+    if e != 0:
+      raise newException(OSError, $strerror(e))
+  else:
+    checkSyscall rc
   conn
 
 proc accept*(conn: Conn): Conn =

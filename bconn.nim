@@ -69,7 +69,10 @@ proc newBwriter*(conn: Conn, size: int = 4096): Bwriter =
 proc flush*(bw: Bwriter) {.cps:C.} =
   ## Flush writer buffer
   let n = bw.conn.send(bw.buf)
-  bw.buf = bw.buf[n..^1]
+  if n >= 0:
+    bw.buf = bw.buf[n..^1]
+  else:
+    bw.eof = true
 
 proc write*(bw: Bwriter, buf: string) {.cps:C.} =
   ## Write string

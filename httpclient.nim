@@ -16,7 +16,10 @@ proc newClient*(): Client =
 proc doRequest*(meth: string, client: Client, url: string): Response {.cps:C.} =
   # Request
   let req = newRequest(meth, url)
-  let conn = conn.dial(req.uri.hostname, req.uri.port)
+  var port = req.uri.port
+  if port == "":
+    port = req.uri.scheme
+  let conn = conn.dial(req.uri.hostname, port)
   let bw = newBwriter(conn)
   let br = newBreader(conn)
   req.write(bw)
