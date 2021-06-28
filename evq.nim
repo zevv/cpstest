@@ -30,6 +30,9 @@ proc push*(evq: Evq, c: C) =
   c.evq = evq
   evq.work.addLast c
 
+proc jield*(c: C): C {.cpsMagic.} =
+  c.evq.work.addLast c
+
 proc iowait*[T](c: C, conn: T, events: int): C {.cpsMagic.} =
   ## Suspend continuation until I/O event triggered
   assert c != nil
@@ -54,8 +57,9 @@ proc run*(evq: Evq) =
   while true:
 
     # Trampoline all work
-    while evq.work.len > 0:
-      discard trampoline(evq.work.popFirst)
+    var work = move evq.work
+    while work.len > 0:
+      discard trampoline(work.popFirst)
 
     # Calculate timeout until first timer
     evq.now = getMonoTime().ticks.float / 1.0e9
@@ -63,6 +67,7 @@ proc run*(evq: Evq) =
     if evq.timers.len > 0:
       let timer = evq.timers[0]
       timeout = cint(1000 * (timer.time - evq.now))
+      timeout = max(timeout, 0)
 
     # Wait for timers or I/O
     var es: array[8, EpollEvent]
