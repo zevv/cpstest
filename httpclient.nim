@@ -6,7 +6,6 @@ import std/uri
 import cps
 
 import bconn
-import evq
 import types
 import conn
 import http

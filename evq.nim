@@ -44,6 +44,10 @@ proc sleep*(c: C, delay: float): C {.cpsMagic.} =
   assert c.evq != nil
   c.evq.timers.push EvqTimer(c: c, time: c.evq.now + delay)
 
+proc getEvq*(c: C): Evq {.cpsVoodoo.} =
+  ## Retrieve current event queue
+  c.evq
+
 proc run*(evq: Evq) =
   ## Run the event queue
 

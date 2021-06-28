@@ -21,7 +21,7 @@ proc ticker() {.cps:C.} =
 
 var myevq = newEvq()
 
-myevq.push whelp httpserver.listenAndServe(myevq, 8080)
+myevq.push whelp newHttpServer().listenAndServe(8080)
 myevq.push whelp ticker()
 
 myevq.run()
