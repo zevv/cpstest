@@ -22,13 +22,13 @@ proc listen*(port: int): Conn =
   checkSyscall listen(fd, SOMAXCONN)
   return Conn(fd: fd)
 
-proc dial*(host: string, port: int): Conn {.cps:C.}=
+proc dial*(host: string, port: string): Conn {.cps:C.}=
   # Resolve address
   var res: ptr AddrInfo
   var hints: AddrInfo
   hints.ai_family = AF_UNSPEC
   hints.ai_socktype = SOCK_STREAM
-  let r = getaddrinfo(host, $port, hints.addr, res)
+  let r = getaddrinfo(host, port, hints.addr, res)
   if r != 0:
     raise newException(OSError, "dial: " & $gai_strerror(r))
 

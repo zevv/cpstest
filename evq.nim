@@ -52,9 +52,8 @@ proc run*(evq: Evq) =
   while true:
 
     # Trampoline all work
-    var work = move evq.work
-    while work.len > 0:
-      discard trampoline(work.popFirst)
+    while evq.work.len > 0:
+      discard trampoline(evq.work.popFirst)
 
     # Calculate timeout until first timer
     evq.now = getMonoTime().ticks.float / 1.0e9
