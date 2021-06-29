@@ -42,6 +42,9 @@ continuations around between the compiled server and the Nim-js client.
   functions or vtables. Given the nature of CPS I'm not sure if something like
   this would be feasible though.
 
+- Compilation times: CPS compilation is becoming a bit slow. Not a show stopper
+  for me yet.
+
 ### The ugly
 
 - CPS and for loops don't play well - this is mostly a limitation of the Nim
