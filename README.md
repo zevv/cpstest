@@ -13,7 +13,7 @@ continuations around between the compiled server and the Nim-js client.
 
 - The quality of the CPS transformation is getting better by the day. For
   day-to-day code I have not ran into big surprises, and any issues I did find
-  were often fixed without hours by the CPS authors.
+  were often fixed within hours by the CPS authors.
 
 - CPS in it's current state offers a nice and usable API; it allows for a very
   natural "thread like" feel, writing linear code and hiding all the gory async
