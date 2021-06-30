@@ -11,6 +11,10 @@ continuations around between the compiled server and the Nim-js client.
 
 ### The good
 
+- CPS is fun! I'm having a blast - with a few lines of code I move continations
+  to run on a different thread, for examply for DNS resolving. See `dial()` in
+  `conn.nim`
+
 - The quality of the CPS transformation is getting better by the day. For
   day-to-day code I have not ran into big surprises, and any issues I did find
   were often fixed within hours by the CPS authors.
