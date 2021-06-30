@@ -47,16 +47,15 @@ proc sleep*(c: C, delay: float): C {.cpsMagic.} =
 proc jield*(c: C): C {.cpsMagic.} =
   ## Suspend continuation until the next evq iteration - cooperative schedule.
   c.evq.timers.push EvqTimer(c: c, time: c.evq.now)
-
-proc threadFunc(c: C) {.thread.} =
-  var c = c
+  
+proc threadFunc(t: EvqThread) {.thread, nimcall.} =
+  var c = t.c
   while c.running:
     c = c.fn(c).C
 
 proc away*(c: C): C {.cpsMagic.} =
-  var t = new Thread[C]
-  GC_ref(t) # TODO
-  createThread(t[], threadFunc, c)
+  var t = EvqThread(c: c)
+  createThread(t.thread, threadFunc, t)
 
 proc back*(c: C): C {.cpsMagic.} =
   c.evq.thlock.acquire
@@ -68,7 +67,6 @@ proc back*(c: C): C {.cpsMagic.} =
 proc getEvq*(c: C): Evq {.cpsVoodoo.} =
   ## Retrieve event queue for the current contiunation
   c.evq
-
 
 proc updateNow(evq: Evq) =
   evq.now = getMonoTime().ticks.float / 1.0e9

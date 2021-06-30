@@ -18,6 +18,10 @@ type
     time*: float
     c*: C
 
+  EvqThread* = ref object
+    thread*: Thread[C]
+    c*: C
+
   Evq* = ref object
     now*: float                      # The current monotime
     epfd*: cint                      # Epoll file descriptor
