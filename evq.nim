@@ -69,7 +69,7 @@ proc threadBack*(c: C): C {.cpsMagic.} =
   c.evq.thlock.release
 
 template onThread*(code: untyped) =
-  ## Move the thread to a fresh spawned thread and trampoline it there
+  ## Move the continuation to a fresh spawned thread and trampoline it there
   threadOut()
   code
   threadBack()
