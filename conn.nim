@@ -22,7 +22,11 @@ proc listen*(port: int): Conn =
   checkSyscall listen(fd, SOMAXCONN)
   return Conn(fd: fd)
 
-proc dial*(host: string, port: string): Conn {.cps:C.}=
+proc dial*(host: string, service: string): Conn {.cps:C.}=
+  ## Dial establishes a TCP connection to the given host and service. It will
+  ## perform non-blocking name resolution and connect to the first address
+  ## resolved.
+
   # Resolve address
   var res: ptr AddrInfo
   var hints: AddrInfo
@@ -30,7 +34,7 @@ proc dial*(host: string, port: string): Conn {.cps:C.}=
   hints.ai_socktype = SOCK_STREAM
 
   onThread:
-    let r = getaddrinfo(host, port, hints.addr, res)
+    let r = getaddrinfo(host, service, hints.addr, res)
     if r != 0:
       raise newException(OSError, "dial: " & $gai_strerror(r))
 
