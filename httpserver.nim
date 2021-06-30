@@ -68,10 +68,15 @@ proc doService(hs: HttpServer) {.cps:C.} =
 
 proc listenAndServe*(hs: HttpServer, port: int) {.cps:C.} =
   hs.running = true
-  getEvq().push whelp doService(hs)
+
+  # Spawn a separate thread for periodic service work
+  spawn hs.doService()
+
+  # Create listening socket and spawn a new thread for each
+  # incoming connection
   let connServer = listen(port)
   while true:
     iowait(connServer, POLLIN)
     let conn = connServer.accept()
-    getEvq().push whelp hs.doConnection(conn)
+    spawn hs.doConnection(conn)
 

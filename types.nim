@@ -24,6 +24,7 @@ type
     id*: int
 
   Evq* = ref object
+    running*: bool                   # Main event loop runs as long as this is true
     now*: float                      # The current monotime
     epfd*: cint                      # Epoll file descriptor
     evfd*: SocketHandle              # Eventfd for signaling thread joins

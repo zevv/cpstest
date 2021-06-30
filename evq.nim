@@ -11,6 +11,7 @@ proc eventfd(count: cuint, flags: cint): cint
 
 proc newEvq*(): Evq =
   var evq = Evq(
+    running: true,
     now: getMonoTime().ticks.float / 1.0e9,
     epfd: epoll_create(1),
     evfd: eventfd(0, 0).SocketHandle,
@@ -71,9 +72,12 @@ template onThread*(code: untyped) =
   code
   threadBack()
 
-proc getEvq*(c: C): Evq {.cpsVoodoo.} =
-  ## Retrieve event queue for the current contiunation
-  c.evq
+proc spawnAux*(c: C, cNew: C) {.cpsVoodoo.} =
+  c.evq.push cNew
+
+template spawn*(t: untyped) =
+  ## Asynchronously spawn the passed function and add it to the event queue
+  spawnAux whelp t
 
 proc updateNow(evq: Evq) =
   evq.now = getMonoTime().ticks.float / 1.0e9
@@ -87,7 +91,6 @@ proc calculateTimeout(evq: Evq): cint =
     result = max(result, 0)
 
 proc handleWork(evq: Evq) =
-  # Trampoline all work
   while evq.work.len > 0:
     discard trampoline(evq.work.popFirst)
 
@@ -115,27 +118,31 @@ proc handleIoFd(evq: Evq, fd: SocketHandle) =
   evq.ios.del fd
   evq.push io.c
 
+proc runOne*(evq: Evq) =
+  ## Rune one event queue iteration
+
+  # Trampoline all scheduled work
+  handleWork(evq)
+
+  # Calculate timeout until first timer
+  var timeout = evq.calculateTimeout()
+
+  # Wait for timers or I/O
+  var es: array[8, EpollEvent]
+  let n = epoll_wait(evq.epfd, es[0].addr, es.len.cint, timeout)
+
+  # Handle all expired timers
+  evq.handleTimers()
+
+  # Handle ready file descriptors
+  for i in 0..<n:
+    let fd = es[i].data.u64.SocketHandle
+    if fd == evq.evfd:
+      handleEventFd(evq, evq.evfd.cint)
+    else:
+      handleIoFd(evq, fd)
+
 proc run*(evq: Evq) =
-  
   ## Run the event queue
-  while true:
-
-    handleWork(evq)
-
-    # Calculate timeout until first timer
-    var timeout = evq.calculateTimeout()
-
-    # Wait for timers or I/O
-    var es: array[8, EpollEvent]
-    let n = epoll_wait(evq.epfd, es[0].addr, es.len.cint, timeout)
-
-    evq.handleTimers()
-
-    # Handle ready file descriptors
-    for i in 0..<n:
-      let fd = es[i].data.u64.SocketHandle
-      if fd == evq.evfd:
-        handleEventFd(evq, evq.evfd.cint)
-      else:
-        handleIoFd(evq, fd)
-
+  while evq.running:
+    evq.runOne()
