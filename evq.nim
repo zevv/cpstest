@@ -53,12 +53,9 @@ proc threadFunc(t: EvqThread) {.thread.} =
   while c.running:
     c = c.fn(c).C
 
-var id = 0
-
 proc threadOut*(c: C): C {.cpsMagic.} =
   withLock c.evq.thLock:
-    var t = EvqThread(c: c, id: id)
-    inc id
+    var t = EvqThread(c: c)
     c.evq.thwork.incl t
     createThread(t.thread, threadFunc, t)
 
