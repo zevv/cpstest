@@ -53,17 +53,22 @@ proc threadFunc(c: C) {.thread.} =
   while c.running:
     c = c.fn(c).C
 
-proc away*(c: C): C {.cpsMagic.} =
+proc threadOut*(c: C): C {.cpsMagic.} =
   var t = new Thread[C]
   GC_ref(t) # TODO
   createThread(t[], threadFunc, c)
 
-proc back*(c: C): C {.cpsMagic.} =
+proc threadBack*(c: C): C {.cpsMagic.} =
   c.evq.thlock.acquire
   c.evq.thwork.add c
   var sig = 1.uint64
   checkSyscall write(c.evq.evfd.cint, sig.addr, sig.sizeof)
   c.evq.thlock.release
+
+template onThread*(code: untyped) =
+  threadOut()
+  code
+  threadBack()
 
 proc getEvq*(c: C): Evq {.cpsVoodoo.} =
   ## Retrieve event queue for the current contiunation

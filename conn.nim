@@ -28,11 +28,11 @@ proc dial*(host: string, port: string): Conn {.cps:C.}=
   var hints: AddrInfo
   hints.ai_family = AF_UNSPEC
   hints.ai_socktype = SOCK_STREAM
-  away()
-  let r = getaddrinfo(host, port, hints.addr, res)
-  back()
-  if r != 0:
-    raise newException(OSError, "dial: " & $gai_strerror(r))
+
+  onThread:
+    let r = getaddrinfo(host, port, hints.addr, res)
+    if r != 0:
+      raise newException(OSError, "dial: " & $gai_strerror(r))
 
   # Create non-blocking socket and try to connect
   let fd = socket(res.ai_family, res.ai_socktype or O_NONBLOCK, 0)
