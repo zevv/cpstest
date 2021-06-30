@@ -28,7 +28,9 @@ proc dial*(host: string, port: string): Conn {.cps:C.}=
   var hints: AddrInfo
   hints.ai_family = AF_UNSPEC
   hints.ai_socktype = SOCK_STREAM
+  away()
   let r = getaddrinfo(host, port, hints.addr, res)
+  back()
   if r != 0:
     raise newException(OSError, "dial: " & $gai_strerror(r))
 

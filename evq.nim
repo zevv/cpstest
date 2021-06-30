@@ -2,17 +2,23 @@
 # Minimal event queue implementation supporting a work queue, I/O and timers
 
 
-import std/[tables,heapqueue,deques,posix,epoll,monotimes]
+import std/[tables,heapqueue,deques,posix,epoll,monotimes,locks]
 import cps
 import types
 
+proc eventfd(count: cuint, flags: cint): cint 
+  {.cdecl, importc: "eventfd", header: "<sys/eventfd.h>".}
 
 proc newEvq*(): Evq =
-  Evq(
+  var evq = Evq(
     now: getMonoTime().ticks.float / 1.0e9,
     epfd: epoll_create(1),
-    name: "Lebowski",
+    evfd: eventfd(0, 0).SocketHandle,
   )
+  var ee = EpollEvent(events: POLLIN.uint32, data: EpollData(u64: evq.evfd.uint64))
+  checkSyscall epoll_ctl(evq.epfd, EPOLL_CTL_ADD, evq.evfd, ee.addr)
+  initlock evq.thlock
+  return evq
 
 template `<`(a, b: EvqTimer): bool =
   a.time < b.time
@@ -23,10 +29,6 @@ proc push*(evq: Evq, c: C) =
   assert evq != nil
   c.evq = evq
   evq.work.addLast c
-
-proc jield*(c: C): C {.cpsMagic.} =
-  ## Suspend continuation until the next evq iteration - cooperative schedule
-  c.evq.work.addLast c
 
 proc iowait*[T](c: C, conn: T, events: int): C {.cpsMagic.} =
   ## Suspend continuation until I/O event triggered
@@ -42,41 +44,91 @@ proc sleep*(c: C, delay: float): C {.cpsMagic.} =
   assert c.evq != nil
   c.evq.timers.push EvqTimer(c: c, time: c.evq.now + delay)
 
+proc jield*(c: C): C {.cpsMagic.} =
+  ## Suspend continuation until the next evq iteration - cooperative schedule.
+  c.evq.timers.push EvqTimer(c: c, time: c.evq.now)
+
+proc threadFunc(c: C) {.thread.} =
+  var c = c
+  while c.running:
+    c = c.fn(c).C
+
+proc away*(c: C): C {.cpsMagic.} =
+  var t = new Thread[C]
+  GC_ref(t) # TODO
+  createThread(t[], threadFunc, c)
+
+proc back*(c: C): C {.cpsMagic.} =
+  c.evq.thlock.acquire
+  c.evq.thwork.add c
+  var sig = 1.uint64
+  checkSyscall write(c.evq.evfd.cint, sig.addr, sig.sizeof)
+  c.evq.thlock.release
+
 proc getEvq*(c: C): Evq {.cpsVoodoo.} =
   ## Retrieve event queue for the current contiunation
   c.evq
 
-proc run*(evq: Evq) =
 
+proc updateNow(evq: Evq) =
+  evq.now = getMonoTime().ticks.float / 1.0e9
+
+proc calculateTimeout(evq: Evq): cint =
+  evq.updateNow()
+  result = -1
+  if evq.timers.len > 0:
+    let timer = evq.timers[0]
+    result = cint(1000 * (timer.time - evq.now))
+    result = max(result, 0)
+
+proc handleWork(evq: Evq) =
+  # Trampoline all work
+  while evq.work.len > 0:
+    discard trampoline(evq.work.popFirst)
+
+proc handleTimers(evq: Evq) =
+  # Move expired timer continuations to the work queue
+  evq.updateNow()
+  while evq.timers.len > 0 and evq.timers[0].time <= evq.now:
+    evq.push evq.timers.pop.c
+
+proc handleEventFd(evq: Evq, fd: cint) =
+  # Handle eventfd, moving back() threads back to the work queue
+  var sig: uint64
+  checkSyscall read(fd, sig.addr, sig.sizeof)
+  withLock evq.thlock:
+    for c in evq.thwork:
+      evq.push c
+    evq.thwork.setLen(0)
+
+proc handleIoFd(evq: Evq, fd: SocketHandle) =
+  # Move triggered I/O continuations to the work queue
+  let io = evq.ios[fd]
+  checkSyscall epoll_ctl(evq.epfd, EPOLL_CTL_DEL, io.fd.cint, nil)
+  evq.ios.del fd
+  evq.push io.c
+
+proc run*(evq: Evq) =
+  
   ## Run the event queue
   while true:
 
-    # Trampoline all work
-    while evq.work.len > 0:
-      discard trampoline(evq.work.popFirst)
+    handleWork(evq)
 
     # Calculate timeout until first timer
-    evq.now = getMonoTime().ticks.float / 1.0e9
-    var timeout: cint = -1
-    if evq.timers.len > 0:
-      let timer = evq.timers[0]
-      timeout = cint(1000 * (timer.time - evq.now))
-      timeout = max(timeout, 0)
+    var timeout = evq.calculateTimeout()
 
     # Wait for timers or I/O
     var es: array[8, EpollEvent]
     let n = epoll_wait(evq.epfd, es[0].addr, es.len.cint, timeout)
 
-    # Move expired timer continuations to the work queue
-    evq.now = getMonoTime().ticks.float / 1.0e9
-    while evq.timers.len > 0 and evq.timers[0].time <= evq.now:
-      evq.push evq.timers.pop.c
+    evq.handleTimers()
 
-    # Move triggered I/O continuations to the work queue
+    # Handle ready file descriptors
     for i in 0..<n:
       let fd = es[i].data.u64.SocketHandle
-      let io = evq.ios[fd]
-      checkSyscall epoll_ctl(evq.epfd, EPOLL_CTL_DEL, io.fd.cint, nil)
-      evq.ios.del fd
-      evq.push io.c
+      if fd == evq.evfd:
+        handleEventFd(evq, evq.evfd.cint)
+      else:
+        handleIoFd(evq, fd)
 

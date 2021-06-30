@@ -1,7 +1,7 @@
 
 # Our types
 
-import std/[posix,deques,posix,heapqueue,tables,macros]
+import std/[posix,deques,posix,heapqueue,tables,macros,locks]
 import cps
 
 export POLLIN, POLLOUT
@@ -19,18 +19,18 @@ type
     c*: C
 
   Evq* = ref object
-    now*: float
-    epfd*: cint
-    work*: Deque[C]
-    timers*: HeapQueue[EvqTimer]
-    ios*: Table[SocketHandle, EvqIo]
-    name*: string
+    now*: float                      # The current monotime
+    epfd*: cint                      # Epoll file descriptor
+    work*: Deque[C]                  # Work dequeue
+    timers*: HeapQueue[EvqTimer]     # Scheduled timer continuations
+    ios*: Table[SocketHandle, EvqIo] # Scheduler IO continiations
+
+    thlock*: Lock                    # protecting everything in this section
+    evfd*: SocketHandle              # eventfd for signaling new work on thwork
+    thwork*: seq[C]                  # new work added from threads
 
 proc trace2*(c: C, what: string, info: LineInfo) =
   echo "trace ", what, " ", info
-
-proc dumpEvq*(c: C, what: string) {.cpsVoodoo.} =
-  echo what, ": ", c.evq.name
 
 proc pass*(cFrom, cTo: C): C =
   assert cFrom != nil
