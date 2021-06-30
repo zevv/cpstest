@@ -17,13 +17,21 @@ type
   Response* = ref object
     headers*: Headers
     statusCode*: int
-    statusMessage*: string
+    reason*: string
     contentLength*: int
     keepAlive*: bool
 
 #
 # Headers
 #
+
+proc canon(s: string): string =
+  let l = s.len
+  result = newStringOfCap(l)
+  var upper = true
+  for c in s:
+    result &= (if upper: c.toUpperAscii else: c.toLowerAscii)
+    upper = c == '-'
 
 proc add*(headers: Headers, key: string, val: string) =
   if key notin headers.headers:
@@ -41,15 +49,13 @@ proc read*(headers: Headers, br: Breader) {.cps:C.} =
 
 proc `$`*(headers: Headers): string =
   for k, vs in headers.headers:
-    for v in vs:
-      result.add k & ": " & v & "\r\n"
+    result.add canon(k) & ": " & vs.join(",") & "\r\n"
   result.add "\r\n"
 
-proc getOrDefault*(headers: Headers, key: string, def: string): string =
+proc get*(headers: Headers, key: string): string =
+  let key = key.toLower
   if key in headers.headers:
-    headers.headers[key][0]
-  else:
-    def
+    return headers.headers[key][0]
 
 
 #
@@ -81,16 +87,19 @@ proc read*(req: Request, br: Breader) {.cps:C.} =
     br.close()
     return
   let ps = splitWhitespace(line, 3)
-  let (meth, trailer, proto) = (ps[0], ps[1], ps[2])
+  let (meth, target, version) = (ps[0], ps[1], ps[2])
 
   req.meth = meth
   req.headers.read(br)
   
-  req.keepAlive = req.headers.getOrDefault("connection", "Close") == "Keep-Alive"
-  req.contentLength = parseInt(req.headers.getOrDefault("content-length", "0"))
-  let host = req.headers.getOrDefault("host", "")
+  req.keepAlive = req.headers.get("Connection") == "Keep-Alive"
+  let host = req.headers.get("Host")
+  try:
+    req.contentLength = parseInt(req.headers.get("Content-Length"))
+  except:
+    discard
   
-  parseUri("http://" & host & trailer, req.uri)
+  parseUri("http://" & host & target, req.uri)
 
 proc write*(req: Request, bw: BWriter) {.cps:C.} =
   bw.write($req)
@@ -120,7 +129,7 @@ proc read*(rsp: Response, br: BReader) {.cps:C.}=
   
   let ps = splitWhitespace(line, 3)
   rsp.statusCode = parseInt(ps[1])
-  rsp.statusMessage = ps[2]
+  rsp.reason = ps[2]
   rsp.headers.read(br)
 
 proc write*(rsp: Response, bw: Bwriter) {.cps:C.} =

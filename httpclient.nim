@@ -36,7 +36,7 @@ proc get*(client: Client, url: string): Response {.cps:C} =
   var follows = 0
   while follows < client.maxFollowRedirects:
     let rsp = doRequest("GET", client, url)
-    let location = rsp.headers.getOrDefault("location", "")
+    let location = rsp.headers.get("location")
     if location.len == 0:
       return rsp
     else:
