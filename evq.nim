@@ -2,7 +2,7 @@
 # Minimal event queue implementation supporting a work queue, I/O and timers
 
 
-import std/[tables,heapqueue,deques,posix,epoll,monotimes,locks]
+import std/[tables,heapqueue,deques,posix,epoll,monotimes,locks,sets]
 import cps
 import types
 
@@ -48,24 +48,28 @@ proc jield*(c: C): C {.cpsMagic.} =
   ## Suspend continuation until the next evq iteration - cooperative schedule.
   c.evq.timers.push EvqTimer(c: c, time: c.evq.now)
 
-proc threadFunc(c: C) {.thread.} =
-  var c = c
+proc threadFunc(t: EvqThread) {.thread.} =
+  var c = t.c
   while c.running:
     c = c.fn(c).C
 
+var id = 0
+
 proc threadOut*(c: C): C {.cpsMagic.} =
-  var t = new Thread[C]
-  GC_ref(t) # TODO
-  createThread(t[], threadFunc, c)
+  withLock c.evq.thLock:
+    var t = EvqThread(c: c, id: id)
+    inc id
+    c.evq.thwork.incl t
+    createThread(t.thread, threadFunc, t)
 
 proc threadBack*(c: C): C {.cpsMagic.} =
   c.evq.thlock.acquire
-  c.evq.thwork.add c
   var sig = 1.uint64
   checkSyscall write(c.evq.evfd.cint, sig.addr, sig.sizeof)
   c.evq.thlock.release
 
 template onThread*(code: untyped) =
+  ## Move the thread to a fresh spawned thread and trampoline it there
   threadOut()
   code
   threadBack()
@@ -73,7 +77,6 @@ template onThread*(code: untyped) =
 proc getEvq*(c: C): Evq {.cpsVoodoo.} =
   ## Retrieve event queue for the current contiunation
   c.evq
-
 
 proc updateNow(evq: Evq) =
   evq.now = getMonoTime().ticks.float / 1.0e9
@@ -92,22 +95,24 @@ proc handleWork(evq: Evq) =
     discard trampoline(evq.work.popFirst)
 
 proc handleTimers(evq: Evq) =
-  # Move expired timer continuations to the work queue
   evq.updateNow()
   while evq.timers.len > 0 and evq.timers[0].time <= evq.now:
     evq.push evq.timers.pop.c
 
 proc handleEventFd(evq: Evq, fd: cint) =
-  # Handle eventfd, moving back() threads back to the work queue
   var sig: uint64
   checkSyscall read(fd, sig.addr, sig.sizeof)
+  var done: seq[EvqThread]
   withLock evq.thlock:
-    for c in evq.thwork:
-      evq.push c
-    evq.thwork.setLen(0)
+    for t in evq.thwork:
+      if not t.thread.running:
+        done.add t
+    for t in done:
+      joinThread t.thread
+      evq.push t.c
+      evq.thwork.excl t
 
 proc handleIoFd(evq: Evq, fd: SocketHandle) =
-  # Move triggered I/O continuations to the work queue
   let io = evq.ios[fd]
   checkSyscall epoll_ctl(evq.epfd, EPOLL_CTL_DEL, io.fd.cint, nil)
   evq.ios.del fd

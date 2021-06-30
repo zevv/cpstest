@@ -1,7 +1,7 @@
 
 # Our types
 
-import std/[posix,deques,posix,heapqueue,tables,macros,locks]
+import std/[posix,deques,posix,heapqueue,tables,macros,locks,sets]
 import cps
 
 export POLLIN, POLLOUT
@@ -18,19 +18,21 @@ type
     time*: float
     c*: C
 
+  EvqThread* = ref object
+    thread*: Thread[EvqThread]
+    c*: C
+    id*: int
+
   Evq* = ref object
     now*: float                      # The current monotime
     epfd*: cint                      # Epoll file descriptor
+    evfd*: SocketHandle              # Eventfd for signaling thread joins
     work*: Deque[C]                  # Work dequeue
     timers*: HeapQueue[EvqTimer]     # Scheduled timer continuations
     ios*: Table[SocketHandle, EvqIo] # Scheduler IO continiations
 
-    thlock*: Lock                    # protecting everything in this section
-    evfd*: SocketHandle              # eventfd for signaling new work on thwork
-    thwork*: seq[C]                  # new work added from threads
-
-proc trace2*(c: C, what: string, info: LineInfo) =
-  echo "trace ", what, " ", info
+    thlock*: Lock                    # Protecting thwork
+    thwork*: HashSet[EvqThread]      # Offloaded continuations
 
 proc pass*(cFrom, cTo: C): C =
   assert cFrom != nil
