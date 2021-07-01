@@ -27,22 +27,26 @@ proc dial*(host: string, service: string): Conn {.cps:C.}=
   ## perform non-blocking name resolution and connect to the first address
   ## resolved.
 
-  # Resolve address
   var res: ptr AddrInfo
   var hints: AddrInfo
   hints.ai_family = AF_UNSPEC
   hints.ai_socktype = SOCK_STREAM
 
+  defer:
+    freeaddrinfo(res)
+
   onThread:
+    # the getaddrinfo() call is ran on a dedicated thread so not to block
+    # the CPS event queue
     let r = getaddrinfo(host, service, hints.addr, res)
-    if r != 0:
-      raise newException(OSError, "dial: " & $gai_strerror(r))
+
+  if r != 0:
+    raise newException(OSError, $gai_strerror(r))
 
   # Create non-blocking socket and try to connect
   let fd = socket(res.ai_family, res.ai_socktype or O_NONBLOCK, 0)
   let conn = Conn(fd: fd)
   var rc = connect(fd, res.ai_addr, res.ai_addrlen)
-  freeaddrinfo(res)
 
   if rc == -1 and errno == EINPROGRESS:
     # non-blocking connect: backoff until POLLOUT and get the result with getsockopt

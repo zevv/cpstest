@@ -51,8 +51,7 @@ proc jield*(c: C): C {.cpsMagic.} =
 
 proc threadFunc(t: EvqThread) {.thread.} =
   var c = t.c
-  while c.running:
-    c = c.fn(c).C
+  discard trampoline c
 
 proc threadOut*(c: C): C {.cpsMagic.} =
   withLock c.evq.thLock:

@@ -6,10 +6,14 @@ import cps
 import types, evq, http, httpserver, httpclient
 
 # Perform an async http request
-proc client() {.cps:C.} =
-  let client = httpClient.newClient()
-  let rsp = client.get("http://zevv.nl/")
-  echo rsp
+proc client(url: string) {.cps:C.} =
+  try:
+    let client = httpClient.newClient()
+    let rsp = client.get(url)
+    echo rsp
+  except OSError as e:
+    echo "Could not connect to ", url, ": ", e.msg
+
 
 # A simple periodic ticker
 proc ticker() {.cps:C.} =
@@ -30,8 +34,10 @@ proc blocker() {.cps:C.} =
 var myevq = newEvq()
 
 myevq.push whelp newHttpServer().listenAndServe(8080)
-myevq.push whelp client()
+myevq.push whelp client("http://nim-lang.org")
+myevq.push whelp client("http://nom-lang.org")
 myevq.push whelp ticker()
 myevq.push whelp blocker()
 
 myevq.run()
+
