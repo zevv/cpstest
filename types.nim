@@ -35,6 +35,9 @@ type
     thlock*: Lock                    # Protecting thwork
     thwork*: HashSet[EvqThread]      # Offloaded continuations
 
+#proc trace*(c: C; name: string; info: LineInfo) =
+#  echo "trace ", name, $info
+
 proc pass*(cFrom, cTo: C): C =
   assert cFrom != nil
   assert cTo != nil

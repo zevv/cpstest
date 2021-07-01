@@ -118,7 +118,7 @@ proc handleIoFd(evq: Evq, fd: SocketHandle) =
   evq.push io.c
 
 proc runOne*(evq: Evq) =
-  ## Rune one event queue iteration
+  ## Run one event queue iteration
 
   # Trampoline all scheduled work
   handleWork(evq)
