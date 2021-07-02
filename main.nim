@@ -14,7 +14,6 @@ proc client(url: string) {.cps:C.} =
   except OSError as e:
     echo "Could not connect to ", url, ": ", e.msg
 
-
 # A simple periodic ticker
 proc ticker() {.cps:C.} =
   while true:
