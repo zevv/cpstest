@@ -34,11 +34,10 @@ proc blocker() {.cps:C.} =
 var myevq = newEvq()
 
 myevq.push whelp newHttpServer().listenAndServe(8080)
+myevq.push whelp client("http://zevv.nl/")
+myevq.push whelp client("http://zovv.nl/")
 myevq.push whelp ticker()
 myevq.push whelp blocker()
-
-for i in 0..1000:
-  myevq.push whelp client("http://127.0.0.1:8080/")
 
 myevq.run()
 
