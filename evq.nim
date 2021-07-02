@@ -43,7 +43,7 @@ proc sleep*(c: C, delay: float): C {.cpsMagic.} =
   ## Suspend continuation until timer expires
   assert c != nil
   assert c.evq != nil
-  c.evq.timers.push EvqTimer(c: c, time: c.evq.now + delay)
+  c.evq.timers.push EvqTimer(c: c, time: c.evq.now + delay + 0.005)
 
 proc jield*(c: C): C {.cpsMagic.} =
   ## Suspend continuation until the next evq iteration - cooperative schedule.
