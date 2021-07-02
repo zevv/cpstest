@@ -75,7 +75,9 @@ proc newRequest*(meth: string, url: string): Request =
   parseUri(url, result.uri)
 
 proc `$`*(req: Request): string =
-  result.add req.meth & " " & req.uri.path & " HTTP/1.1\r\n"
+  var path = req.uri.path
+  if path == "": path = "/"
+  result.add req.meth & " " & path & " HTTP/1.1\r\n"
   result.add("Host: " & req.uri.hostname & "\r\n")
   if req.uri.query.len > 0:
     result.add("?" & req.uri.query)
