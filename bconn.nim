@@ -30,8 +30,8 @@ proc read*(br: Breader, n: int): string {.cps:C.} =
   ## Read exactly `n` bytes
   while not br.eof and br.buf.len < n:
     br.fill(n - br.buf.len)
-  result = br.buf
-  br.buf = ""
+  result = br.buf[0..<n]
+  br.buf = br.buf[n..^1]
 
 
 proc readLine*(br: Breader): string {.cps:C.} =

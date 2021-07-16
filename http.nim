@@ -78,10 +78,10 @@ proc newRequest*(meth: string, url: string): Request =
 proc `$`*(req: Request): string =
   var path = req.uri.path
   if path == "": path = "/"
+  if req.uri.query.len > 0:
+    path.add("?" & req.uri.query)
   result.add req.meth & " " & path & " HTTP/1.1\r\n"
   result.add("Host: " & req.uri.hostname & "\r\n")
-  if req.uri.query.len > 0:
-    result.add("?" & req.uri.query)
   if req.contentLength > 0:
     result.add("Content-Length: " & $req.contentLength & "\r\n")
   result.add $req.headers
