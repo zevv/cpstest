@@ -19,33 +19,54 @@ type
     `type`: string
     user: string
     password: string
-   
+  
+  MatrixLoginRsp = object
+    user_id: string
+    access_token: string
+    home_server: string
+    device_id: string
 
-proc newMatrixClient(server: string): MatrixClient =
+
+
+template debug(mc: MatrixClient, s: string) =
+  discard
+
+proc post(mc: MatrixClient, meth: string, req: JsonNode): JsonNode {.cps:C.} =
+  let client = httpClient.newClient()
+  mc.debug("< " & meth & ": " & $ req)
+  let rsp = client.request("POST", mc.url & meth, $req)
+  result = client.readBody(rsp).parseJson()
+  mc.debug("> " & meth & ": " & $result)
+
+
+proc get(mc: MatrixClient, meth: string): JsonNode {.cps:C.} =
+  let client = httpClient.newClient()
+  let rsp = client.request("GET", mc.url & meth)
+  result = client.readBody(rsp).parseJson()
+  mc.debug("> " & meth & ": " & $result)
+
+
+proc newMatrixClient*(server: string): MatrixClient =
   let mc =MatrixClient(
-    url: "http://" & server & "/_matrix/client/r0/"
+    url: "https://" & server & "/_matrix/client/r0/"
   )
   echo mc.url
   mc
 
-proc doRequest(mc: MatrixClient, meth: string, req: JsonNode) {.cps:C.} =
-  let client = httpClient.newClient()
-  let rsp = client.request("POST", mc.url & meth, $req)
-  echo rsp
-  echo rsp.body
+proc setToken*(mc: MatrixClient, token: string) =
+  mc.token = token
 
-proc login(mc: MatrixClient, user, password: string) {.cps:C.} =
+proc login*(mc: MatrixClient, user, password: string) {.cps:C.} =
   let req = % MatrixLoginReq(
     type: "m.login.password",
     user: user,
     password: password
   )
 
-  mc.doRequest("login", req)
-
-proc matrix() {.cps:C.} =
-
-  let mc = newMatrixClient("tchncs.de")
-  mc.login("zevv", "123qwe!@#QWE")
+  let lr = mc.post("login", req).to(MatrixLoginRsp)
+  mc.token = lr.access_token
 
 
+proc sync*(mc: MatrixClient) {.cps:C.} =
+  let s = mc.get("sync?access_token=" & mc.token)
+  echo s

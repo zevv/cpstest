@@ -37,7 +37,6 @@ proc doRequest(hs: HttpServer, br: Breader, bw: Bwriter) {.cps:C.} =
   rsp.keepAlive = req.keepAlive
   rsp.headers.add("Date", hs.date)
   rsp.headers.add("Server", "cpstest")
-  rsp.headers.add("Server", "cpstest")
   rsp.write(bw)
 
   if rsp.contentLength > 0:
