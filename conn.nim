@@ -1,5 +1,5 @@
 
-# Little async socket library
+# Little async socket library, supports TCP and TLS
 
 import std/[posix]
 import openssl
@@ -10,7 +10,6 @@ type
 
   Conn* = ref object
     fd*: SocketHandle
-    secure: bool
     ctx: SslCtx
     ssl: SslPtr
 
@@ -85,7 +84,6 @@ proc dial*(host: string, service: string): Conn {.cps:C.}=
 
   # Handle SSL handshake
   if service == "https":
-    conn.secure = true
     conn.ctx = SSL_CTX_new(SSLv23_client_method())
     #SSL_CTX_set_verify(conn.ctx, SSL_VERIFY_NONE, nil)
     conn.ssl = SSL_new(conn.ctx)
@@ -111,7 +109,7 @@ proc accept*(conn: Conn): Conn =
 
 
 proc send*(conn: Conn, s: string): int {.cps:C.} =
-  if conn.secure:
+  if conn.ssl != nil:
     while true:
       let r = sslWrite(conn.ssl, cast[cstring](s[0].unsafeAddr), s.len.cint)
       if r >= 0:
@@ -126,7 +124,7 @@ proc send*(conn: Conn, s: string): int {.cps:C.} =
 
 proc recv*(conn: Conn, n: int): string {.cps:C.} =
   var s = newString(n)
-  if conn.secure:
+  if conn.ssl != nil:
     while true:
       let r = sslRead(conn.ssl, cast[cstring](s[0].unsafeAddr), s.len.cint)
       if r >= 0:
