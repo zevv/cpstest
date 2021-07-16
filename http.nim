@@ -20,6 +20,7 @@ type
     reason*: string
     contentLength*: int
     keepAlive*: bool
+    body*: string
 
 #
 # Headers
@@ -81,6 +82,8 @@ proc `$`*(req: Request): string =
   result.add("Host: " & req.uri.hostname & "\r\n")
   if req.uri.query.len > 0:
     result.add("?" & req.uri.query)
+  if req.contentLength > 0:
+    result.add("Content-Length: " & $req.contentLength & "\r\n")
   result.add $req.headers
 
 proc read*(req: Request, br: Breader) {.cps:C.} =
@@ -133,6 +136,13 @@ proc read*(rsp: Response, br: BReader) {.cps:C.}=
   rsp.statusCode = parseInt(ps[1])
   rsp.reason = ps[2]
   rsp.headers.read(br)
+  
+  try:
+    rsp.contentLength = parseInt(rsp.headers.get("Content-Length"))
+  except:
+    discard
+
+  
 
 proc write*(rsp: Response, bw: Bwriter) {.cps:C.} =
   bw.write $rsp

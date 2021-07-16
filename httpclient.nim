@@ -13,9 +13,10 @@ proc newClient*(): Client =
   )
 
 
-proc doRequest*(meth: string, client: Client, url: string): Response {.cps:C.} =
+proc request*(client: Client, meth: string, url: string, body: string = ""): Response {.cps:C.} =
   # Request
   let req = newRequest(meth, url)
+  req.contentLength = body.len
   var port = req.uri.port
   if port == "":
     port = req.uri.scheme
@@ -23,23 +24,19 @@ proc doRequest*(meth: string, client: Client, url: string): Response {.cps:C.} =
   let bw = newBwriter(conn)
   let br = newBreader(conn)
   req.write(bw)
+
+  if body.len > 0:
+    bw.write(body)
+
   bw.flush()
 
   # Response
   var rsp = newResponse()
   rsp.read(br)
+  let body = br.read(rsp.contentLength)
   
   return rsp
   
 proc get*(client: Client, url: string): Response {.cps:C} =
-  var url = url
-  var follows = 0
-  while follows < client.maxFollowRedirects:
-    let rsp = doRequest("GET", client, url)
-    let location = rsp.headers.get("location")
-    if location.len == 0:
-      return rsp
-    else:
-      url = location
-      inc follows
+  client.request("GET", url)
 
