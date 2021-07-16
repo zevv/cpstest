@@ -28,17 +28,10 @@ proc blocker() {.cps:C.} =
       os.sleep(4000)
     jield()
 
-
 proc doMatrix() {.cps:C.} =
-  when true:
-    let mc = newMatrixClient("matrix.org")
-    mc.login("zevver", os.getenv("matrix_password"))
-  else:
-    let mc = newMatrixClient("tchncs.de")
-    mc.login("zevv", os.getenv("matrix_password"))
-    #mc.setToken("syt_emV2dmVy_VvTvLIyKgDxtdOIyYXYO_0Mc2Qe")
+  let mc = newMatrixClient("matrix.org")
+  mc.login("zevver", os.getenv("matrix_password"))
   mc.sync()
-
 
 
 var myevq = newEvq()
