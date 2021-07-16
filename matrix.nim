@@ -27,9 +27,9 @@ type
     device_id: string
 
 
-
 template debug(mc: MatrixClient, s: string) =
   discard
+
 
 proc post(mc: MatrixClient, meth: string, req: JsonNode): JsonNode {.cps:C.} =
   let client = httpClient.newClient()
@@ -47,14 +47,10 @@ proc get(mc: MatrixClient, meth: string): JsonNode {.cps:C.} =
 
 
 proc newMatrixClient*(server: string): MatrixClient =
-  let mc =MatrixClient(
+  MatrixClient(
     url: "https://" & server & "/_matrix/client/r0/"
   )
-  echo mc.url
-  mc
 
-proc setToken*(mc: MatrixClient, token: string) =
-  mc.token = token
 
 proc login*(mc: MatrixClient, user, password: string) {.cps:C.} =
   let req = % MatrixLoginReq(
