@@ -1,28 +1,7 @@
 
 import std/[times, deques, macros, strutils]
-
 import cps
 import types
-
-type
-
-  LogLevel* = enum
-    llDmp, llDbg, llInf, llTst, llWrn, llErr
-
-  Logger* = ref object
-    level: LogLevel
-    backends: seq[LoggerBackend]
-    fn: LoggerBackend
-    queue: Deque[LogRec]
-
-  LogRec = object
-    level: LogLevel
-    tag: string
-    msg: string
-    time: DateTime
-
-  LoggerBackend = proc(rec: LogRec)
-
 
 
 proc levelInfo(level: LogLevel): (string, string) =
@@ -73,15 +52,11 @@ proc log*(l: Logger, level: LogLevel, tag: string, msg: string) {.cps:C.} =
   l.work()
 
 
-proc log_if*(l: Logger, lvl: LogLevel, tag: string, msg: string) {.cps:C.} =
-  if lvl >= l.level:
-    l.log(lvl, tag, msg)
-
-
 template make(mname, mlevel: untyped) =
   template mname*(l: Logger, msg: string) =
     mixin log_tag
-    log_if(l, mlevel, log_tag, msg)
+    if mlevel >= l.level:
+      l.log(mlevel, log_tag, msg)
 
 make(dump,  llDmp)
 make(debug, llDbg)

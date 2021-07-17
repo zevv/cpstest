@@ -9,8 +9,9 @@ import types
 proc eventfd(count: cuint, flags: cint): cint 
   {.cdecl, importc: "eventfd", header: "<sys/eventfd.h>".}
 
-proc newEvq*(): Evq =
+proc newEvq*(logger: Logger): Evq =
   var evq = Evq(
+    logger: logger,
     running: true,
     now: getMonoTime().ticks.float / 1.0e9,
     epfd: epoll_create(1),
@@ -96,6 +97,27 @@ template spawn*(evq: Evq, t: untyped) =
   ## Asynchronously spawn the passed function and add it to the event queue
   evq.push whelp t
 
+
+proc getLogger*(c: C): Logger {.cpsVoodoo.} =
+  c.evq.logger
+
+template make(mname, mlevel: untyped) =
+  template mname*(msg: string) =
+    mixin log_tag
+    let l = getLogger()
+    if mlevel >= l.level:
+      l.log(mlevel, log_tag, msg)
+
+make(dump,  llDmp)
+make(debug, llDbg)
+make(info,  llInf)
+make(test,  llTst)
+make(warn,  llWrn)
+make(err,   llErr)
+
+
+
+# Implementation
 
 proc updateNow(evq: Evq) =
   evq.now = getMonoTime().ticks.float / 1.0e9

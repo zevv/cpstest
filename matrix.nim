@@ -8,7 +8,9 @@
 from os import nil
 import json
 import cps
-import types, evq, http, httpserver, httpclient
+import types, evq, http, httpserver, httpclient, logger
+
+const log_tag = "matrix"
 
 type
 
@@ -65,7 +67,7 @@ proc login*(mc: MatrixClient, user, password: string) {.cps:C.} =
     let lr = rsp.to(MatrixLoginRsp)
     mc.token = lr.access_token
   else:
-    echo rsp["error"]
+    warn $rsp["error"]
 
 
 proc sync*(mc: MatrixClient) {.cps:C.} =

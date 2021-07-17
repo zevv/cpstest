@@ -1,7 +1,7 @@
 
 # Our types
 
-import std/[posix,deques,posix,heapqueue,tables,macros,locks,sets]
+import std/[posix, deques, posix, heapqueue, tables, macros, locks, sets, times]
 import cps
 
 export POLLIN, POLLOUT
@@ -24,6 +24,7 @@ type
     id*: int
 
   Evq* = ref object
+    logger*: Logger                  # Logger instance
     running*: bool                   # Main event loop runs as long as this is true
     now*: float                      # The current monotime
     epfd*: cint                      # Epoll file descriptor
@@ -34,6 +35,25 @@ type
 
     thlock*: Lock                    # Protecting thwork
     thwork*: HashSet[EvqThread]      # Offloaded continuations
+
+  # TODO: I hate it https://github.com/nim-lang/rfcs/issues/6
+
+  LogLevel* = enum
+    llDmp, llDbg, llInf, llTst, llWrn, llErr
+
+  Logger* = ref object
+    level*: LogLevel
+    backends*: seq[LoggerBackend]
+    fn*: LoggerBackend
+    queue*: Deque[LogRec]
+
+  LogRec* = object
+    level*: LogLevel
+    tag*: string
+    msg*: string
+    time*: DateTime
+
+  LoggerBackend* = proc(rec: LogRec)
 
 #proc trace*(c: C; name: string; info: LineInfo) =
 #  echo "trace ", name, $info

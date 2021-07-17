@@ -12,7 +12,6 @@ type
     running: bool
     date: string
     stats: HttpServerStats
-    logger: Logger
 
   HttpServerStats = object
     connectionCount: int
@@ -20,10 +19,8 @@ type
 
 
 
-proc newHttpServer*(logger: Logger): HttpServer =
-  HttpServer(
-    logger: logger
-  )
+proc newHttpServer*(): HttpServer =
+  HttpServer()
 
 proc doRequest(hs: HttpServer, br: Breader, bw: Bwriter) {.cps:C.} =
 
@@ -35,7 +32,7 @@ proc doRequest(hs: HttpServer, br: Breader, bw: Bwriter) {.cps:C.} =
   if req.contentLength > 0:
     let reqBody = br.read(req.contentLength)
 
-  hs.logger.dump($req)
+  dump($req)
 
   # Response
   let rsp = newResponse()
@@ -70,13 +67,13 @@ proc doService(hs: HttpServer) {.cps:C.} =
     hs.date = now().utc().format("ddd, dd MMM yyyy HH:mm:ss 'GMT'")
     if stats != hs.stats:
       stats = hs.stats
-      hs.logger.info $stats.repr
+      info $stats.repr
     sleep(1)
 
 proc listenAndServe*(hs: HttpServer, port: int) {.cps:C.} =
   hs.running = true
   
-  hs.logger.info("Starting HTTP server on port " & $port)
+  info("Starting HTTP server on port " & $port)
 
   # Spawn a separate thread for periodic service work
   spawn hs.doService()
