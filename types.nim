@@ -30,7 +30,7 @@ type
     evfd*: SocketHandle              # Eventfd for signaling thread joins
     work*: Deque[C]                  # Work dequeue
     timers*: HeapQueue[EvqTimer]     # Scheduled timer continuations
-    ios*: Table[SocketHandle, EvqIo] # Scheduler IO continiations
+    ios*: Table[SocketHandle, EvqIo] # Scheduled I/O continuations
 
     thlock*: Lock                    # Protecting thwork
     thwork*: HashSet[EvqThread]      # Offloaded continuations
