@@ -24,7 +24,6 @@ proc logConsole(rec: LogRec) =
              rec.tag.alignLeft(10) & "|"
     suffix = "\e[0m"
 
-  var n = 0
   for l in rec.msg.splitLines():
     if l.len > 0:
       echo prefix & l & suffix

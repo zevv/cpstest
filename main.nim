@@ -12,7 +12,7 @@ proc client(url: string) {.cps:C.} =
   try:
     let client = httpClient.newClient()
     let rsp = client.get(url)
-    info $rsp
+    dump $rsp
     let body = client.readBody(rsp)
   except OSError as e:
     warn "Could not connect to " & url & ": " & e.msg
@@ -31,31 +31,32 @@ proc blocker() {.cps:C.} =
       os.sleep(4000)
     jield()
 
+# Login to a matrix server
 proc doMatrix() {.cps:C.} =
   let mc = newMatrixClient("matrix.org")
   mc.login("zevver", os.getenv("matrix_password"))
 
-
+# Spawn a subprocess, do some stdin/stdout and wait for it to die
 proc doProcess() {.cps:C.} =
-  info "doProcess"
+  info "subprocess starting"
   let p = runProcess("/usr/bin/rev", @[])
   p.stdin.write("Reverse me")
   p.stdin.close()
-  echo p.stdout.read(1024)
-  info "waiting"
+  info "subprocess said: " & p.stdout.read(1024)
   p.wait()
-  info "waited"
+  info "subprocess done"
 
-
+# Run all kinds of stuff
 proc runStuff() {.cps:C.} =
   info("CpsTest firing up")
-  #spawn newHttpServer().listenAndServe(8080)
-  #spawn client("http://127.0.0.1:8080")
-  #spawn client("https://zevv.nl/")
-  #spawn ticker()
-  #spawn blocker()
-  #spawn doMatrix()
+  spawn newHttpServer().listenAndServe(8080)
+  spawn client("http://127.0.0.1:8080")
+  spawn client("https://zevv.nl/")
+  spawn ticker()
+  spawn blocker()
+  spawn doMatrix()
   spawn doProcess()
+
 
 var mylogger = newLogger(llDmp)
 var myevq = newEvq(mylogger)
