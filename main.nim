@@ -21,7 +21,7 @@ proc client(url: string) {.cps:C.} =
 proc ticker() {.cps:C.} =
   while true:
     debug "tick"
-    sleep(0.25)
+    sleep(1.0)
 
 # Offload blocking os.sleep() to a different thread
 proc blocker() {.cps:C.} =

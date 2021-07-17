@@ -101,6 +101,8 @@ template spawn*(evq: Evq, t: untyped) =
 proc getLogger*(c: C): Logger {.cpsVoodoo.} =
   c.evq.logger
 
+# Logging shortcuts, working on the evq's logging context
+
 template make(mname, mlevel: untyped) =
   template mname*(msg: string) =
     mixin log_tag

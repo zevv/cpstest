@@ -44,7 +44,6 @@ type
   Logger* = ref object
     level*: LogLevel
     backends*: seq[LoggerBackend]
-    fn*: LoggerBackend
     queue*: Deque[LogRec]
 
   LogRec* = object
