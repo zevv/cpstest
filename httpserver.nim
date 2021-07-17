@@ -1,7 +1,9 @@
 
 import std/[times]
 import cps
-import types, evq, conn, bconn, http
+import types, evq, conn, bconn, http, logger
+
+const log_tag = "httpserver"
 
 let body = "hello\n"
 
@@ -10,6 +12,7 @@ type
     running: bool
     date: string
     stats: HttpServerStats
+    logger: Logger
 
   HttpServerStats = object
     connectionCount: int
@@ -17,8 +20,10 @@ type
 
 
 
-proc newHttpServer*(): HttpServer =
-  HttpServer()
+proc newHttpServer*(logger: Logger): HttpServer =
+  HttpServer(
+    logger: logger
+  )
 
 proc doRequest(hs: HttpServer, br: Breader, bw: Bwriter) {.cps:C.} =
 
@@ -29,6 +34,8 @@ proc doRequest(hs: HttpServer, br: Breader, bw: Bwriter) {.cps:C.} =
     return
   if req.contentLength > 0:
     let reqBody = br.read(req.contentLength)
+
+  hs.logger.dump($req)
 
   # Response
   let rsp = newResponse()
@@ -63,11 +70,13 @@ proc doService(hs: HttpServer) {.cps:C.} =
     hs.date = now().utc().format("ddd, dd MMM yyyy HH:mm:ss 'GMT'")
     if stats != hs.stats:
       stats = hs.stats
-      echo stats.repr
+      hs.logger.info $stats.repr
     sleep(1)
 
 proc listenAndServe*(hs: HttpServer, port: int) {.cps:C.} =
   hs.running = true
+  
+  hs.logger.info("Starting HTTP server on port " & $port)
 
   # Spawn a separate thread for periodic service work
   spawn hs.doService()

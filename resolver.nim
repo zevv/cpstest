@@ -1,5 +1,4 @@
 
-# Little async socket library, supports TCP and TLS
 
 import std/[posix]
 import cps

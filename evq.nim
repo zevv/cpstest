@@ -21,8 +21,10 @@ proc newEvq*(): Evq =
   initlock evq.thlock
   return evq
 
+
 template `<`(a, b: EvqTimer): bool =
   a.time < b.time
+
 
 proc push*(evq: Evq, c: C) =
   ## Push work to the back of the work queue
@@ -30,6 +32,7 @@ proc push*(evq: Evq, c: C) =
   assert evq != nil
   c.evq = evq
   evq.work.addLast c
+
 
 proc iowait*[T](c: C, conn: T, events: int): C {.cpsMagic.} =
   ## Suspend continuation until I/O event triggered
@@ -39,15 +42,18 @@ proc iowait*[T](c: C, conn: T, events: int): C {.cpsMagic.} =
   var ee = EpollEvent(events: events.uint32, data: EpollData(u64: conn.fd.uint64))
   checkSyscall epoll_ctl(c.evq.epfd, EPOLL_CTL_ADD, conn.fd.cint, ee.addr)
 
+
 proc sleep*(c: C, delay: float): C {.cpsMagic.} =
   ## Suspend continuation until timer expires
   assert c != nil
   assert c.evq != nil
   c.evq.timers.push EvqTimer(c: c, time: c.evq.now + delay)
 
+
 proc jield*(c: C): C {.cpsMagic.} =
   ## Suspend continuation until the next evq iteration - cooperative schedule.
   c.evq.timers.push EvqTimer(c: c, time: c.evq.now)
+
 
 ## TODO: Threading is known to be wrong and unsafe
 
@@ -55,11 +61,13 @@ proc threadFunc(t: EvqThread) {.thread.} =
   var c = t.c
   discard trampoline c
 
+
 proc threadOut*(c: C): C {.cpsMagic.} =
   withLock c.evq.thLock:
     var t = EvqThread(c: c)
     c.evq.thwork.incl t
     createThread(t.thread, threadFunc, t)
+
 
 proc threadBack*(c: C): C {.cpsMagic.} =
   c.evq.thlock.acquire
@@ -67,25 +75,31 @@ proc threadBack*(c: C): C {.cpsMagic.} =
   checkSyscall write(c.evq.evfd.cint, sig.addr, sig.sizeof)
   c.evq.thlock.release
 
+
 template onThread*(code: untyped) =
   ## Move the continuation to a fresh spawned thread and trampoline it there
   threadOut()
   code
   threadBack()
 
+
 proc spawnAux*(c: C, cNew: C) {.cpsVoodoo.} =
   c.evq.push cNew
+
 
 template spawn*(t: untyped) =
   ## Asynchronously spawn the passed function and add it to the current event queue
   spawnAux whelp t
 
+
 template spawn*(evq: Evq, t: untyped) =
   ## Asynchronously spawn the passed function and add it to the event queue
   evq.push whelp t
 
+
 proc updateNow(evq: Evq) =
   evq.now = getMonoTime().ticks.float / 1.0e9
+
 
 proc calculateTimeout(evq: Evq): cint =
   evq.updateNow()
@@ -95,14 +109,17 @@ proc calculateTimeout(evq: Evq): cint =
     result = cint(1000 * (timer.time - evq.now + 0.005))
     result = max(result, 0)
 
+
 proc handleWork(evq: Evq) =
   while evq.work.len > 0:
     discard trampoline(evq.work.popFirst)
+
 
 proc handleTimers(evq: Evq) =
   evq.updateNow()
   while evq.timers.len > 0 and evq.timers[0].time <= evq.now:
     evq.push evq.timers.pop.c
+
 
 proc handleEventFd(evq: Evq, fd: cint) =
   var sig: uint64
@@ -117,11 +134,13 @@ proc handleEventFd(evq: Evq, fd: cint) =
       evq.push t.c
       evq.thwork.excl t
 
+
 proc handleIoFd(evq: Evq, fd: SocketHandle) =
   let io = evq.ios[fd]
   checkSyscall epoll_ctl(evq.epfd, EPOLL_CTL_DEL, io.fd.cint, nil)
   evq.ios.del fd
   evq.push io.c
+
 
 proc runOne*(evq: Evq) =
   ## Run one event queue iteration
@@ -146,6 +165,7 @@ proc runOne*(evq: Evq) =
       handleEventFd(evq, evq.evfd.cint)
     else:
       handleIoFd(evq, fd)
+
 
 proc run*(evq: Evq) =
   ## Run the event queue

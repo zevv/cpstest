@@ -28,8 +28,6 @@ proc request*(client: Client, meth: string, url: string, body: string = ""): Res
   client.br = newBreader(client.conn)
   req.write(client.bw)
 
-  echo req
-
   if body.len > 0:
     client.bw.write(body)
 

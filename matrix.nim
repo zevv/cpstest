@@ -60,8 +60,12 @@ proc login*(mc: MatrixClient, user, password: string) {.cps:C.} =
     password: password
   )
 
-  let lr = mc.post("login", req).to(MatrixLoginRsp)
-  mc.token = lr.access_token
+  let rsp = mc.post("login", req)
+  if rsp.hasKey "user_id":
+    let lr = rsp.to(MatrixLoginRsp)
+    mc.token = lr.access_token
+  else:
+    echo rsp["error"]
 
 
 proc sync*(mc: MatrixClient) {.cps:C.} =
