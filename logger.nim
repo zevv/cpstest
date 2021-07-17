@@ -50,6 +50,7 @@ proc log*(l: Logger, level: LogLevel, tag: string, msg: string) {.cps:C.} =
   )
   l.queue.addFirst rec
   l.work()
+  sleep(0.1)
 
 
 template make(mname, mlevel: untyped) =
