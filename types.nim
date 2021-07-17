@@ -18,6 +18,9 @@ type
     time*: float
     c*: C
 
+  EvqSig* = object
+    c*: C
+
   EvqThread* = ref object
     thread*: Thread[EvqThread]
     c*: C

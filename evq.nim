@@ -9,13 +9,16 @@ import types
 proc eventfd(count: cuint, flags: cint): cint 
   {.cdecl, importc: "eventfd", header: "<sys/eventfd.h>".}
 
+proc signalfd(fd: cint, mask: var Sigset, flags: cint): cint
+     {.cdecl, importc: "signalfd", header: "<sys/signalfd.h>".}
+
 proc newEvq*(logger: Logger): Evq =
   var evq = Evq(
     logger: logger,
     running: true,
     now: getMonoTime().ticks.float / 1.0e9,
     epfd: epoll_create(1),
-    evfd: eventfd(0, 0).SocketHandle,
+    evfd: eventfd(0, O_CLOEXEC or O_NONBLOCK).SocketHandle,
   )
   var ee = EpollEvent(events: POLLIN.uint32, data: EpollData(u64: evq.evfd.uint64))
   checkSyscall epoll_ctl(evq.epfd, EPOLL_CTL_ADD, evq.evfd, ee.addr)
@@ -29,24 +32,36 @@ template `<`(a, b: EvqTimer): bool =
 
 proc push*(evq: Evq, c: C) =
   ## Push work to the back of the work queue
-  assert c != nil
   assert evq != nil
   c.evq = evq
   evq.work.addLast c
 
 
-proc iowait*[T](c: C, conn: T, events: int): C {.cpsMagic.} =
+proc iowait*(c: C, fd: SocketHandle, events: int): C {.cpsMagic.} =
   ## Suspend continuation until I/O event triggered
-  assert c != nil
   assert c.evq != nil
-  c.evq.ios[conn.fd] = EvqIo(fd: conn.fd, c: c)
-  var ee = EpollEvent(events: events.uint32, data: EpollData(u64: conn.fd.uint64))
-  checkSyscall epoll_ctl(c.evq.epfd, EPOLL_CTL_ADD, conn.fd.cint, ee.addr)
+  c.evq.ios[fd] = EvqIo(fd: fd, c: c)
+  var ee = EpollEvent(events: events.uint32, data: EpollData(u64: fd.uint64))
+  checkSyscall epoll_ctl(c.evq.epfd, EPOLL_CTL_ADD, fd.cint, ee.addr)
+
+
+proc iowait*[T](c: C, conn: T, events: int): C {.cpsMagic.} =
+  iowait(c, conn.fd, events)
+
+
+proc sigwait*(signo: cint) {.cps:C.} =
+  ## Suspend contination until signal received
+  var mask, mask2: Sigset
+  checkSyscall sigemptyset(mask)
+  checkSyscall sigaddset(mask, signo)
+  checkSyscall sigprocmask(SIG_BLOCK, mask, mask2)
+  let fd = signalfd(-1, mask, O_CLOEXEC or O_NONBLOCK).SocketHandle
+  iowait fd, POLLIN
+  #posix.close fd
 
 
 proc sleep*(c: C, delay: float): C {.cpsMagic.} =
   ## Suspend continuation until timer expires
-  assert c != nil
   assert c.evq != nil
   c.evq.timers.push EvqTimer(c: c, time: c.evq.now + delay)
 
