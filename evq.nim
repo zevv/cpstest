@@ -49,6 +49,8 @@ proc jield*(c: C): C {.cpsMagic.} =
   ## Suspend continuation until the next evq iteration - cooperative schedule.
   c.evq.timers.push EvqTimer(c: c, time: c.evq.now)
 
+## TODO: Threading is known to be wrong and unsafe
+
 proc threadFunc(t: EvqThread) {.thread.} =
   var c = t.c
   discard trampoline c

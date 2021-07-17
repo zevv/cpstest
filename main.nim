@@ -3,7 +3,7 @@
 
 from os import nil
 import cps
-import types, evq, http, httpserver, httpclient, matrix
+import types, evq, http, httpserver, httpclient, matrix, resolver
 
 # Perform an async http request
 proc client(url: string) {.cps:C.} =
@@ -11,6 +11,7 @@ proc client(url: string) {.cps:C.} =
     let client = httpClient.newClient()
     let rsp = client.get(url)
     echo rsp
+    let body = client.readBody(rsp)
   except OSError as e:
     echo "Could not connect to ", url, ": ", e.msg
 
@@ -37,11 +38,11 @@ proc doMatrix() {.cps:C.} =
 var myevq = newEvq()
 
 #myevq.push whelp newHttpServer().listenAndServe(8080)
-#myevq.push whelp client("https://zevv.nl/")
+myevq.push whelp client("https://zevv.nl/")
 #myevq.push whelp ticker()
 #myevq.push whelp blocker()
-
-myevq.push whelp doMatrix()
+#myevq.push whelp doMatrix()
+#myevq.push whelp doResolver()
 
 myevq.run()
 
