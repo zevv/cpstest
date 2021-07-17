@@ -4,7 +4,7 @@
 import std/[posix]
 import openssl
 import cps
-import types, evq
+import types, evq, resolver
 
 type
 
@@ -13,6 +13,8 @@ type
     ctx: SslCtx
     ssl: SslPtr
 
+  DialProto = enum
+    dpTcp, dpTls
 
 proc newConn*(): Conn =
   Conn()
@@ -45,34 +47,21 @@ proc sslReadWrite(conn: Conn, r: cint) {.cps:C.} =
       echo "unknown error ", r
 
 
-proc dial*(host: string, service: string): Conn {.cps:C.}=
-  ## Dial establishes a TCP connection to the given host and service. It will
-  ## perform non-blocking name resolution and connect to the first address
-  ## resolved.
+proc dial*(host: string, service: string, proto: DialProto = dpTcp): Conn {.cps:C.}=
+  ## Dial establishes a TCP connection to the given host and service.
 
-  var res: ptr AddrInfo
-  var hints: AddrInfo
-  hints.ai_family = AF_UNSPEC
-  hints.ai_socktype = SOCK_STREAM
-
-  defer:
-    freeaddrinfo(res)
-
-  onThread:
-    # the getaddrinfo() call is ran on a dedicated thread so not to block
-    # the CPS event queue
-    let r = getaddrinfo(host, service, hints.addr, res)
-
-  if r != 0:
-    raise newException(OSError, $gai_strerror(r))
+  # Resolve host and service
+  var ress = getaddrinfo(host, service)
+  let res = ress[0]
 
   # Create non-blocking socket and try to connect
   let fd = socket(res.ai_family, res.ai_socktype or O_NONBLOCK, 0)
   let conn = Conn(fd: fd)
   var rc = connect(fd, res.ai_addr, res.ai_addrlen)
 
+  # non-blocking connect: backoff until POLLOUT and get the result with
+  # getsockopt(SO_ERROR)
   if rc == -1 and errno == EINPROGRESS:
-    # non-blocking connect: backoff until POLLOUT and get the result with getsockopt
     iowait(conn, POLLOUT)
     var e: cint
     var s = SockLen sizeof(e)
@@ -83,7 +72,7 @@ proc dial*(host: string, service: string): Conn {.cps:C.}=
     checkSyscall rc
 
   # Handle SSL handshake
-  if service == "https":
+  if service == "https" or proto == dpTls:
     conn.ctx = SSL_CTX_new(SSLv23_client_method())
     #SSL_CTX_set_verify(conn.ctx, SSL_VERIFY_NONE, nil)
     conn.ssl = SSL_new(conn.ctx)
