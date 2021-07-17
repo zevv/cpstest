@@ -77,8 +77,12 @@ proc spawnAux*(c: C, cNew: C) {.cpsVoodoo.} =
   c.evq.push cNew
 
 template spawn*(t: untyped) =
-  ## Asynchronously spawn the passed function and add it to the event queue
+  ## Asynchronously spawn the passed function and add it to the current event queue
   spawnAux whelp t
+
+template spawn*(evq: Evq, t: untyped) =
+  ## Asynchronously spawn the passed function and add it to the event queue
+  evq.push whelp t
 
 proc updateNow(evq: Evq) =
   evq.now = getMonoTime().ticks.float / 1.0e9

@@ -32,17 +32,15 @@ proc blocker() {.cps:C.} =
 proc doMatrix() {.cps:C.} =
   let mc = newMatrixClient("matrix.org")
   mc.login("zevver", os.getenv("matrix_password"))
-  mc.sync()
 
+proc runStuff() {.cps:C.} =
+  spawn newHttpServer().listenAndServe(8080)
+  spawn client("https://zevv.nl/")
+  spawn ticker()
+  spawn blocker()
+  spawn doMatrix()
 
 var myevq = newEvq()
-
-#myevq.push whelp newHttpServer().listenAndServe(8080)
-myevq.push whelp client("https://zevv.nl/")
-#myevq.push whelp ticker()
-#myevq.push whelp blocker()
-#myevq.push whelp doMatrix()
-#myevq.push whelp doResolver()
-
+myevq.spawn runStuff()
 myevq.run()
 
