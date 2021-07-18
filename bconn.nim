@@ -20,7 +20,7 @@ proc newBreader*(conn: Conn, size: int = 4096): Breader =
   )
 
 proc fill(br: Breader, n: int) {.cps:C.} =
-  let s = br.conn.recv(n)
+  let s = br.conn.read(n)
   if s.len > 0:
     br.buf.add s
   else:
@@ -68,7 +68,7 @@ proc newBwriter*(conn: Conn, size: int = 4096): Bwriter =
 
 proc flush*(bw: Bwriter) {.cps:C.} =
   ## Flush writer buffer
-  let n = bw.conn.send(bw.buf)
+  let n = bw.conn.write(bw.buf)
   if n >= 0:
     bw.buf = bw.buf[n..^1]
   else:

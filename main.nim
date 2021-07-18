@@ -3,7 +3,7 @@
 
 from os import nil
 import cps
-import types, evq, http, httpserver, httpclient, matrix, resolver, logger, process
+import types, evq, http, httpserver, httpclient, matrix, resolver, logger, process, conn
 
 const log_tag = "main"
 
@@ -40,7 +40,7 @@ proc doMatrix() {.cps:C.} =
 proc doProcess() {.cps:C.} =
   info "subprocess starting"
   let p = runProcess("/usr/bin/rev", @[])
-  p.stdin.write("Reverse me")
+  let _ = p.stdin.write("Reverse me")
   p.stdin.close()
   info "subprocess said: " & p.stdout.read(1024)
   p.wait()

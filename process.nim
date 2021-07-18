@@ -1,53 +1,19 @@
 
 import std/[posix]
 import cps
-import types, evq, logger
+import types, evq, logger, conn
 
 const log_tag = "process"
 
 type
-  Pipe* = ref object
-    fd: SocketHandle
 
   Process* = ref object
     pid: Pid
-    stdin*: Pipe
-    stdout*: Pipe
-    stderr*: Pipe
+    stdin*: Conn
+    stdout*: Conn
+    stderr*: Conn
     waitCont*: C
     reaped: bool
-
-
-proc newPipe(fd: SocketHandle): Pipe = 
-  Pipe(fd: fd)
-
-
-proc write*(pipe: Pipe, s: string) {.cps:C.} =
-  var o = 0
-  var n = s.len
-  while true:
-    iowait pipe.fd, POLLOUT
-    let r = posix.write(pipe.fd.cint, s[o].unsafeAddr, n)
-    checkSyscall r
-    inc o, r
-    dec n, r
-    if n == 0:
-      break
-
-proc read*(pipe: Pipe, n: int): string {.cps:C.} =
-  var s = newString(n)
-  iowait pipe.fd, POLLIN
-  let r = posix.read(pipe.fd.cint, s[0].addr, n)
-  checkSyscall r
-  s.setLen if r > 0: r else: 0
-  return s
-
-
-proc close*(p: Pipe) =
-  if p.fd != -1.SocketHandle:
-    checkSyscall close p.fd
-    p.fd = -1.SocketHandle
-
 
 proc resumeWaiting(c: C, p: Process) {.cpsVoodoo.} =
   if p.waitCont != nil:
@@ -95,9 +61,9 @@ proc runProcess*(cmd: string, pargs: seq[string]): Process {.cps:C.} =
  
   let p = Process(
     pid: pid,
-    stdin:  newPipe(fd[0][1].SocketHandle),
-    stdout: newPipe(fd[1][0].SocketHandle),
-    stderr: newPipe(fd[2][0].SocketHandle),
+    stdin:  newConn fd[0][1],
+    stdout: newConn fd[1][0],
+    stderr: newConn fd[2][0],
   )
  
   # Spawn reaper coroutine

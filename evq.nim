@@ -18,7 +18,7 @@ proc newEvq*(logger: Logger): Evq =
     running: true,
     now: getMonoTime().ticks.float / 1.0e9,
     epfd: epoll_create(1),
-    evfd: eventfd(0, O_CLOEXEC or O_NONBLOCK).SocketHandle,
+    evfd: eventfd(0, O_CLOEXEC or O_NONBLOCK).cint,
   )
   var ee = EpollEvent(events: POLLIN.uint32, data: EpollData(u64: evq.evfd.uint64))
   checkSyscall epoll_ctl(evq.epfd, EPOLL_CTL_ADD, evq.evfd, ee.addr)
@@ -37,7 +37,7 @@ proc push*(evq: Evq, c: C) =
   evq.work.addLast c
 
 
-proc iowait*(c: C, fd: SocketHandle, events: int): C {.cpsMagic.} =
+proc iowait*(c: C, fd: cint, events: int): C {.cpsMagic.} =
   ## Suspend continuation until I/O event triggered
   assert c.evq != nil
   c.evq.ios[fd] = EvqIo(fd: fd, c: c)
@@ -55,7 +55,7 @@ proc sigwait*(signo: cint) {.cps:C.} =
   checkSyscall sigemptyset(mask)
   checkSyscall sigaddset(mask, signo)
   checkSyscall sigprocmask(SIG_BLOCK, mask, mask2)
-  let fd = signalfd(-1, mask, O_CLOEXEC or O_NONBLOCK).SocketHandle
+  let fd = signalfd(-1, mask, O_CLOEXEC or O_NONBLOCK).cint
   iowait fd, POLLIN
   #posix.close fd
 
@@ -174,7 +174,7 @@ proc handleEventFd(evq: Evq, fd: cint) =
       evq.thwork.excl t
 
 
-proc handleIoFd(evq: Evq, fd: SocketHandle) =
+proc handleIoFd(evq: Evq, fd: cint) =
   let io = evq.ios[fd]
   checkSyscall epoll_ctl(evq.epfd, EPOLL_CTL_DEL, io.fd.cint, nil)
   evq.ios.del fd
@@ -199,7 +199,7 @@ proc runOne*(evq: Evq) =
 
   # Handle ready file descriptors
   for i in 0..<n:
-    let fd = es[i].data.u64.SocketHandle
+    let fd = es[i].data.u64.cint
     if fd == evq.evfd:
       handleEventFd(evq, evq.evfd.cint)
     else:

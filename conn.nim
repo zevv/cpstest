@@ -9,7 +9,7 @@ import types, evq, resolver
 type
 
   Conn* = ref object
-    fd*: SocketHandle
+    fd*: cint
     ctx: SslCtx
     ssl: SslPtr
 
@@ -18,7 +18,10 @@ type
 
 proc newConn*(): Conn =
   Conn()
-   
+
+
+proc newConn*(fd: cint): Conn =
+  Conn(fd: fd)
 
 proc listen*(port: int): Conn =
   var sa: Sockaddr_in6
@@ -30,7 +33,7 @@ proc listen*(port: int): Conn =
   checkSyscall setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, yes.addr, sizeof(yes).SockLen)
   checkSyscall bindSocket(fd, cast[ptr SockAddr](sa.addr), sizeof(sa).SockLen)
   checkSyscall listen(fd, SOMAXCONN)
-  return Conn(fd: fd)
+  return Conn(fd: fd.cint)
 
 
 proc sslReadWrite(conn: Conn, r: cint) {.cps:C.} =
@@ -56,7 +59,7 @@ proc dial*(host: string, service: string, proto: DialProto = dpTcp): Conn {.cps:
 
   # Create non-blocking socket and try to connect
   let fd = socket(res.ai_family, res.ai_socktype or O_NONBLOCK, 0)
-  let conn = Conn(fd: fd)
+  let conn = Conn(fd: fd.cint)
   var rc = connect(fd, res.ai_addr, res.ai_addrlen)
 
   # non-blocking connect: backoff until POLLOUT and get the result with
@@ -76,7 +79,7 @@ proc dial*(host: string, service: string, proto: DialProto = dpTcp): Conn {.cps:
     conn.ctx = SSL_CTX_new(SSLv23_client_method())
     #SSL_CTX_set_verify(conn.ctx, SSL_VERIFY_NONE, nil)
     conn.ssl = SSL_new(conn.ctx)
-    discard SSL_set_fd(conn.ssl, conn.fd)
+    discard SSL_set_fd(conn.ssl, conn.fd.SocketHandle)
     sslSetConnectstate(conn.ssl)
 
     while true:
@@ -93,11 +96,11 @@ proc dial*(host: string, service: string, proto: DialProto = dpTcp): Conn {.cps:
 proc accept*(conn: Conn): Conn =
   var sa: Sockaddr_in6
   var saLen: SockLen
-  let fd = posix.accept4(conn.fd, cast[ptr SockAddr](sa.addr), saLen.addr, O_NONBLOCK)
-  Conn(fd: fd)
+  let fd = posix.accept4(conn.fd.SocketHandle, cast[ptr SockAddr](sa.addr), saLen.addr, O_NONBLOCK)
+  Conn(fd: fd.cint)
 
 
-proc send*(conn: Conn, s: string): int {.cps:C.} =
+proc write*(conn: Conn, s: string): int {.cps:C.} =
   if conn.ssl != nil:
     while true:
       let r = sslWrite(conn.ssl, cast[cstring](s[0].unsafeAddr), s.len.cint)
@@ -108,10 +111,10 @@ proc send*(conn: Conn, s: string): int {.cps:C.} =
         conn.sslReadWrite(r)
   else:
     iowait(conn, POLLOUT)
-    result = posix.send(conn.fd, s[0].unsafeAddr, s.len, 0)
+    result = posix.write(conn.fd, s[0].unsafeAddr, s.len)
 
 
-proc recv*(conn: Conn, n: int): string {.cps:C.} =
+proc read*(conn: Conn, n: int): string {.cps:C.} =
   var s = newString(n)
   if conn.ssl != nil:
     while true:
@@ -123,13 +126,13 @@ proc recv*(conn: Conn, n: int): string {.cps:C.} =
         conn.sslReadWrite(r)
   else:
     iowait(conn, POLLIN)
-    let r = posix.recv(conn.fd, s[0].addr, n, 0)
+    let r = posix.read(conn.fd, s[0].addr, n)
     s.setLen if r > 0: r else: 0
   return s
 
 
 proc close*(conn: Conn) =
-  if conn.fd != -1.SocketHandle:
+  if conn.fd != -1:
     checkSyscall posix.close(conn.fd)
-    conn.fd = -1.SocketHandle
+    conn.fd = -1
 

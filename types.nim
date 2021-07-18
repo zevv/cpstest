@@ -11,7 +11,7 @@ type
     evq*: Evq
 
   EvqIo* = object
-    fd*: SocketHandle
+    fd*: cint
     c*: C
 
   EvqTimer* = object
@@ -31,10 +31,10 @@ type
     running*: bool                   # Main event loop runs as long as this is true
     now*: float                      # The current monotime
     epfd*: cint                      # Epoll file descriptor
-    evfd*: SocketHandle              # Eventfd for signaling thread joins
+    evfd*: cint                      # Eventfd for signaling thread joins
     work*: Deque[C]                  # Work dequeue
     timers*: HeapQueue[EvqTimer]     # Scheduled timer continuations
-    ios*: Table[SocketHandle, EvqIo] # Scheduled I/O continuations
+    ios*: Table[cint, EvqIo]         # Scheduled I/O continuations
 
     thlock*: Lock                    # Protecting thwork
     thwork*: HashSet[EvqThread]      # Offloaded continuations
