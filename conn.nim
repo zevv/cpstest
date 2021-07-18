@@ -12,16 +12,8 @@ type
     fd*: cint
     ssl: SslPtr
 
-  DialProto = enum
-    dpTcp, dpTls
-    
 
-
-proc newConn*(): Conn =
-  Conn()
-
-
-proc newConn*(fd: cint): Conn =
+proc newConn*(fd: cint = -1): Conn =
   Conn(fd: fd)
 
 
@@ -35,7 +27,7 @@ proc listen*(port: int): Conn =
   checkSyscall setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, yes.addr, sizeof(yes).SockLen)
   checkSyscall bindSocket(fd, cast[ptr SockAddr](sa.addr), sizeof(sa).SockLen)
   checkSyscall listen(fd, SOMAXCONN)
-  return Conn(fd: fd.cint)
+  return newConn(fd.cint)
 
 
 proc handleSslRet(conn: Conn, ret: cint): int {.cps:C.} =
@@ -64,7 +56,7 @@ proc sslHandshake(conn: Conn) {.cps:C.} =
       let _ = conn.handleSslRet(ret)
 
 
-proc dial*(host: string, service: string, proto: DialProto = dpTcp): Conn {.cps:C.}=
+proc dial*(host: string, service: string, secure: bool): Conn {.cps:C.}=
   ## Dial establishes a TCP connection to the given host and service.
 
   # Resolve host and service
@@ -73,7 +65,7 @@ proc dial*(host: string, service: string, proto: DialProto = dpTcp): Conn {.cps:
 
   # Create non-blocking socket and try to connect
   let fd = socket(res.ai_family, res.ai_socktype or O_NONBLOCK, 0)
-  let conn = Conn(fd: fd.cint)
+  let conn = newConn(fd.cint)
   var rc = connect(fd, res.ai_addr, res.ai_addrlen)
 
   # non-blocking connect: backoff until POLLOUT and get the result with
@@ -89,7 +81,7 @@ proc dial*(host: string, service: string, proto: DialProto = dpTcp): Conn {.cps:
     checkSyscall rc
 
   # Handle SSL handshake
-  if service == "https" or proto == dpTls:
+  if service == "https" or secure:
     let ctx = SSL_CTX_new(SSLv23_method())
     conn.ssl = SSL_new(ctx)
     discard SSL_set_fd(conn.ssl, conn.fd.SocketHandle)
@@ -103,7 +95,7 @@ proc accept*(sconn: Conn, certfile=""): Conn {.cps:C.} =
   var saLen: SockLen
   let fd = posix.accept4(sconn.fd.SocketHandle, cast[ptr SockAddr](sa.addr), saLen.addr, O_NONBLOCK)
   checkSyscall fd.cint
-  var conn = Conn(fd: fd.cint)
+  var conn = newConn(fd.cint)
   if certfile != "":
     let ctx = SSL_CTX_new(SSLv23_method())
     discard SSL_CTX_use_certificate_chain_file(ctx, certFile)

@@ -17,23 +17,25 @@ proc newClient*(): Client =
 
 
 proc request*(client: Client, meth: string, url: string, body: string = ""): Response {.cps:C.} =
-  # Request
+
+  # Build request
   let req = newRequest(meth, url)
   req.contentLength = body.len
+
+  # Open connection and send request
   var port = req.uri.port
   if port == "":
     port = req.uri.scheme
-  client.conn = conn.dial(req.uri.hostname, port)
+  let secure = req.uri.scheme == "https"
+  client.conn = conn.dial(req.uri.hostname, port, secure)
   client.bw = newBwriter(client.conn)
   client.br = newBreader(client.conn)
   req.write(client.bw)
-
   if body.len > 0:
     client.bw.write(body)
-
   client.bw.flush()
 
-  # Response
+  # Handle response
   var rsp = newResponse()
   rsp.read(client.br)
   
