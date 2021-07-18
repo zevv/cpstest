@@ -69,7 +69,8 @@ proc listen*(host: string, service: string, certfile: string = ""): Conn {.cps:C
     conn.ctx = SSL_CTX_new(SSLv23_method())
     discard SSL_CTX_use_certificate_chain_file(conn.ctx, certFile)
     discard SSL_CTX_use_PrivateKey_file(conn.ctx, certFile, SSL_FILETYPE_PEM)
-  conn
+
+  result = conn
 
 
 proc dial*(host: string, service: string, secure: bool): Conn {.cps:C.}=
@@ -103,7 +104,8 @@ proc dial*(host: string, service: string, secure: bool): Conn {.cps:C.}=
     discard SSL_set_fd(conn.ssl, conn.fd.SocketHandle)
     sslSetConnectstate(conn.ssl)
     let _ = do_ssl sslDoHandshake(conn.ssl)
-  conn
+
+  result = conn
 
 
 proc accept*(sconn: Conn): Conn {.cps:C.} =
@@ -112,7 +114,7 @@ proc accept*(sconn: Conn): Conn {.cps:C.} =
   let fd = posix.accept4(sconn.fd.SocketHandle, cast[ptr SockAddr](sa.addr), saLen.addr, O_NONBLOCK)
   checkSyscall fd.cint
   var conn = newConn(fd.cint)
-  # If the listening socket has an SSL context, so de we
+  # Setup SSL if the parent conn has a SSL context
   if sconn.ctx != nil:
     conn.ctx = sconn.ctx
     conn.ssl = SSL_new(conn.ctx)
@@ -123,6 +125,8 @@ proc accept*(sconn: Conn): Conn {.cps:C.} =
 
 
 proc write*(conn: Conn, s: string): int {.cps:C.} =
+  ## Write the given string to the conn. The total number of bytes written
+  ## might be less then the length of `s`
   if conn.ssl != nil:
     result = do_ssl sslWrite(conn.ssl, cast[cstring](s[0].unsafeAddr), s.len.cint)
   else:
@@ -131,6 +135,7 @@ proc write*(conn: Conn, s: string): int {.cps:C.} =
 
 
 proc read*(conn: Conn, n: int): string {.cps:C.} =
+  # Read up to `n` bytes from the conn.
   var s = newString(n)
   var r: int
   if conn.ssl != nil:
@@ -143,6 +148,7 @@ proc read*(conn: Conn, n: int): string {.cps:C.} =
 
 
 proc close*(conn: Conn) =
+  # Close the conn
   if conn.fd != -1:
     checkSyscall posix.close(conn.fd)
     conn.fd = -1
