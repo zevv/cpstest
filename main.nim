@@ -44,11 +44,10 @@ proc doMatrix() {.cps:C.} =
 # Spawn a subprocess, do some stdin/stdout and wait for it to die
 proc doProcess() {.cps:C.} =
   info "subprocess starting"
-  let p = process.start("/usr/bin/printenv", @[])
+  let p = process.start("/usr/bin/rev", @[])
   let _ = p.stdin.write("Reverse me")
   p.stdin.close()
-  let d = p.stdout.read(1024)
-  echo d
+  info "subprocess said: " & p.stdout.read(1024)
   let status = p.wait()
   info "subprocess done, status: $1", status
 

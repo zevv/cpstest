@@ -10,7 +10,7 @@ type
   ProcessCtx* = ref object
     cmd*: string
     args*: seq[string]
-    env*: seq[tuple[k:string, v:string]]
+    env*: Table[string, string]
     cwd*: string
 
   Process* = ref object
@@ -72,8 +72,8 @@ proc start*(pc: ProcessCtx): Process {.cps:C.} =
     args.insert pc.cmd, 0
     let cargs = allocCStringArray(args)
     # Prepare env
-    for e in pc.env:
-      os.putEnv(e.k, e.v)
+    for k, v in pc.env:
+      os.putEnv(k, v)
     # Chdir
     if pc.cwd != "":
       checkSyscall posix.chdir(pc.cwd)
