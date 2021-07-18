@@ -22,11 +22,11 @@ proc logConsole(rec: LogRec) =
     prefix = timestamp & " " &
              color & label & "|" &
              rec.tag.alignLeft(10) & "|"
-    suffix = "\e[0m"
+    suffix = "\e[0m\n"
 
   for l in rec.msg.splitLines():
     if l.len > 0:
-      echo prefix & l & suffix
+      io.stderr.write prefix & l & suffix
 
 
 proc newLogger*(level: LogLevel): Logger =

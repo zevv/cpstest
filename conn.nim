@@ -4,33 +4,20 @@
 import std/[posix, os]
 import openssl
 import cps
-import types, evq, resolver
+import types, evq, resolver, logger
+
+const log_tag = "conn"
 
 type
-
   Conn* = ref object
     fd*: cint
+    ctx: SslCtx
     ssl: SslPtr
 
 
-proc newConn*(fd: cint = -1): Conn =
-  Conn(fd: fd)
+# Handle SSL function call return codes
 
-
-proc listen*(port: int): Conn =
-  var sa: Sockaddr_in6
-  sa.sin6_family = AF_INET6.uint16
-  sa.sin6_port = htons(port.uint16)
-  sa.sin6_addr = in6addr_any
-  var yes: int = 1
-  let fd = socket(AF_INET6, SOCK_STREAM or O_NONBLOCK, 0);
-  checkSyscall setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, yes.addr, sizeof(yes).SockLen)
-  checkSyscall bindSocket(fd, cast[ptr SockAddr](sa.addr), sizeof(sa).SockLen)
-  checkSyscall listen(fd, SOMAXCONN)
-  return newConn(fd.cint)
-
-
-proc handleSslRet(conn: Conn, ret: cint): int {.cps:C.} =
+proc handle_ssl_ret(conn: Conn, ret: cint) {.cps:C.} =
   let r = SSL_get_error(conn.ssl, ret)
   case r:
     of SSL_ERROR_SSL:
@@ -43,17 +30,46 @@ proc handleSslRet(conn: Conn, ret: cint): int {.cps:C.} =
     of SSL_ERROR_SYSCALL:
       raiseOSError(osLastError())
     else:
-      echo "unknown error ", r
-  r
+      warn "Unhandled ssl error, ret=" & $ret & " r=" & $r
 
 
-proc sslHandshake(conn: Conn) {.cps:C.} =
+# TODO: I'd rather make this a proc but #208
+
+template do_ssl(stmt: typed): int =
+  var ret: cint
   while true:
-    let ret = sslDoHandshake(conn.ssl)
-    if ret == 1:
+    ret = stmt
+    if ret >= 0:
       break
-    else:
-      let _ = conn.handleSslRet(ret)
+    handle_ssl_ret(conn, ret)
+  ret
+
+
+proc newConn*(fd: cint = -1): Conn =
+  Conn(fd: fd)
+
+
+proc listen*(host: string, service: string, certfile: string = ""): Conn {.cps:C.} =
+  debug "listening on " & host & " " & service
+
+  # Resolve host and service
+  var ress = getaddrinfo(host, service)
+  let res = ress[0]
+  var yes: int = 1
+
+  # Bind and listen socket
+  let fd = socket(AF_INET6, SOCK_STREAM or O_NONBLOCK, 0)
+  checkSyscall setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, yes.addr, sizeof(yes).SockLen)
+  checkSyscall bindSocket(fd, res.ai_addr, res.ai_addrlen)
+  checkSyscall listen(fd, SOMAXCONN)
+  let conn = newConn(fd.cint)
+
+  # Create SSL context if cert given
+  if certfile != "":
+    conn.ctx = SSL_CTX_new(SSLv23_method())
+    discard SSL_CTX_use_certificate_chain_file(conn.ctx, certFile)
+    discard SSL_CTX_use_PrivateKey_file(conn.ctx, certFile, SSL_FILETYPE_PEM)
+  conn
 
 
 proc dial*(host: string, service: string, secure: bool): Conn {.cps:C.}=
@@ -81,41 +97,34 @@ proc dial*(host: string, service: string, secure: bool): Conn {.cps:C.}=
     checkSyscall rc
 
   # Handle SSL handshake
-  if service == "https" or secure:
-    let ctx = SSL_CTX_new(SSLv23_method())
-    conn.ssl = SSL_new(ctx)
+  if secure:
+    conn.ctx = SSL_CTX_new(SSLv23_method())
+    conn.ssl = SSL_new(conn.ctx)
     discard SSL_set_fd(conn.ssl, conn.fd.SocketHandle)
     sslSetConnectstate(conn.ssl)
-    sslHandshake(conn)
+    let _ = do_ssl sslDoHandshake(conn.ssl)
   conn
 
 
-proc accept*(sconn: Conn, certfile=""): Conn {.cps:C.} =
+proc accept*(sconn: Conn): Conn {.cps:C.} =
   var sa: Sockaddr_in6
   var saLen: SockLen
   let fd = posix.accept4(sconn.fd.SocketHandle, cast[ptr SockAddr](sa.addr), saLen.addr, O_NONBLOCK)
   checkSyscall fd.cint
   var conn = newConn(fd.cint)
-  if certfile != "":
-    let ctx = SSL_CTX_new(SSLv23_method())
-    discard SSL_CTX_use_certificate_chain_file(ctx, certFile)
-    discard SSL_CTX_use_PrivateKey_file(ctx, certFile, SSL_FILETYPE_PEM)
-    conn.ssl = SSL_new(ctx)
+  # If the listening socket has an SSL context, so de we
+  if sconn.ctx != nil:
+    conn.ctx = sconn.ctx
+    conn.ssl = SSL_new(conn.ctx)
     discard SSL_set_fd(conn.ssl, conn.fd.SocketHandle)
     sslSetAcceptState(conn.ssl)
-    sslHandshake(conn)
+    let _ = do_ssl sslDoHandshake(conn.ssl)
   conn
 
 
 proc write*(conn: Conn, s: string): int {.cps:C.} =
   if conn.ssl != nil:
-    while true:
-      let r = sslWrite(conn.ssl, cast[cstring](s[0].unsafeAddr), s.len.cint)
-      if r >= 0:
-        result = r
-        break
-      else:
-        let _ = conn.handleSslRet(r)
+    result = do_ssl sslWrite(conn.ssl, cast[cstring](s[0].unsafeAddr), s.len.cint)
   else:
     iowait(conn, POLLOUT)
     result = posix.write(conn.fd, s[0].unsafeAddr, s.len)
@@ -123,18 +132,13 @@ proc write*(conn: Conn, s: string): int {.cps:C.} =
 
 proc read*(conn: Conn, n: int): string {.cps:C.} =
   var s = newString(n)
+  var r: int
   if conn.ssl != nil:
-    while true:
-      let r = sslRead(conn.ssl, cast[cstring](s[0].unsafeAddr), s.len.cint)
-      if r >= 0:
-        s.setLen r
-        break
-      else:
-        let _ = conn.handleSslRet(r)
+    r = do_ssl sslRead(conn.ssl, cast[cstring](s[0].unsafeAddr), s.len.cint)
   else:
     iowait(conn, POLLIN)
-    let r = posix.read(conn.fd, s[0].addr, n)
-    s.setLen if r > 0: r else: 0
+    r = posix.read(conn.fd, s[0].addr, n)
+  s.setLen if r > 0: r else: 0
   return s
 
 

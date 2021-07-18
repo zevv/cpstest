@@ -114,6 +114,7 @@ template spawn*(evq: Evq, t: untyped) =
 
 
 proc getLogger*(c: C): Logger {.cpsVoodoo.} =
+  assert c.evq != nil
   c.evq.logger
 
 # Logging shortcuts, working on the evq's logging context

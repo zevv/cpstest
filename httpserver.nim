@@ -73,21 +73,21 @@ proc doService(hs: HttpServer) {.cps:C.} =
     sleep(1)
 
 
-proc listenAndServe*(hs: HttpServer, port: int, certfile="") {.cps:C.} =
+proc listenAndServe*(hs: HttpServer, host: string, service: string, certfile="") {.cps:C.} =
   hs.running = true
   
-  info("Starting HTTP server on port " & $port)
+  info "Starting HTTP server on " & host & " " & service
 
   # Spawn a separate thread for periodic service work
   spawn hs.doService()
 
   # Create listening socket and spawn a new thread for each
   # incoming connection
-  let connServer = listen(port)
+  let connServer = listen(host, service, certfile)
   while true:
     iowait(connServer, POLLIN)
     try:
-      let conn = connServer.accept(certfile)
+      let conn = connServer.accept()
       spawn hs.doConnection(conn)
     except OsError:
       warn getCurrentExceptionMsg()

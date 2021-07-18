@@ -49,8 +49,8 @@ proc doProcess() {.cps:C.} =
 # Run all kinds of stuff
 proc runStuff() {.cps:C.} =
   info("CpsTest firing up")
-  spawn newHttpServer().listenAndServe(8080)
-  spawn newHttpServer().listenAndServe(8443, "cert.pem")
+  spawn newHttpServer().listenAndServe("::", "8080")
+  spawn newHttpServer().listenAndServe("::", "8443", "cert.pem")
   spawn client("https://127.0.0.1:8443")
   #spawn client("https://zevv.nl/")
   spawn ticker()
