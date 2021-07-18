@@ -9,10 +9,34 @@ import types, evq, resolver, logger
 const log_tag = "conn"
 
 type
-  Conn* = ref object
+  ConnObj* = object
+    name: string
     fd*: cint
     ctx: SslCtx
     ssl: SslPtr
+
+  Conn* = ref ConnObj
+
+
+proc `$`*(conn: Conn | ConnObj): string =
+  result.add "conn(" & $conn.fd
+  if conn.ssl != nil: result.add ",ssl"
+  if conn.name != "": result.add "," & conn.name
+  result.add ")"
+
+
+proc getName*(sa: ptr Sockaddr, salen: SockLen): string =
+  var host = newString(posix.INET6_ADDRSTRLEN)
+  var serv = newString(32)
+  discard posix.getnameinfo(sa, salen,
+                    host[0].addr,host.len.SockLen,
+                    serv[0].addr, serv.len.SockLen,
+                    NI_NUMERICHOST)
+  if sa.sa_family.cint == AF_INET6: host = "[" & host & "]"
+  result = host & ":" & serv
+
+proc `$`*(sas: Sockaddr_storage): string =
+  getName cast[ptr Sockaddr](sas.unsafeAddr), sizeof(sas).SockLen
 
 
 # Handle SSL function call return codes
@@ -45,8 +69,14 @@ template do_ssl(stmt: typed): int =
   ret
 
 
-proc newConn*(fd: cint = -1): Conn =
-  Conn(fd: fd)
+proc newConn*(fd: cint, name: string): Conn =
+  Conn(fd: fd, name: name)
+
+proc newConn*(fd: cint): Conn =
+  newConn(fd, "-")
+
+proc newConn*(): Conn =
+  newConn(-1, "-")
 
 
 proc listen*(host: string, service: string, certfile: string = ""): Conn {.cps:C.} =
@@ -58,11 +88,12 @@ proc listen*(host: string, service: string, certfile: string = ""): Conn {.cps:C
   var yes: int = 1
 
   # Bind and listen socket
-  let fd = socket(AF_INET6, SOCK_STREAM or O_NONBLOCK, 0)
+  let fd = socket(res.ai_family, SOCK_STREAM or O_NONBLOCK, 0)
   checkSyscall setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, yes.addr, sizeof(yes).SockLen)
   checkSyscall bindSocket(fd, res.ai_addr, res.ai_addrlen)
   checkSyscall listen(fd, SOMAXCONN)
-  let conn = newConn(fd.cint)
+  let name = getname(res.ai_addr, res.ai_addrlen)
+  let conn = newConn(fd.cint, name)
 
   # Create SSL context if cert given
   if certfile != "":
@@ -82,7 +113,8 @@ proc dial*(host: string, service: string, secure: bool): Conn {.cps:C.}=
 
   # Create non-blocking socket and try to connect
   let fd = socket(res.ai_family, res.ai_socktype or O_NONBLOCK, 0)
-  let conn = newConn(fd.cint)
+  let name = getname(res.ai_addr, res.ai_addrlen)
+  let conn = newConn(fd.cint, name)
   var rc = connect(fd, res.ai_addr, res.ai_addrlen)
 
   # non-blocking connect: backoff until POLLOUT and get the result with
@@ -109,11 +141,12 @@ proc dial*(host: string, service: string, secure: bool): Conn {.cps:C.}=
 
 
 proc accept*(sconn: Conn): Conn {.cps:C.} =
-  var sa: Sockaddr_in6
-  var saLen: SockLen
+  var sa: Sockaddr_storage
+  var saLen: SockLen = sizeof(sa).SockLen
   let fd = posix.accept4(sconn.fd.SocketHandle, cast[ptr SockAddr](sa.addr), saLen.addr, O_NONBLOCK)
   checkSyscall fd.cint
-  var conn = newConn(fd.cint)
+  let name = getName(cast[ptr Sockaddr](sa.addr), saLen)
+  var conn = newConn(fd.cint, name)
   # Setup SSL if the parent conn has a SSL context
   if sconn.ctx != nil:
     conn.ctx = sconn.ctx
@@ -121,6 +154,7 @@ proc accept*(sconn: Conn): Conn {.cps:C.} =
     discard SSL_set_fd(conn.ssl, conn.fd.SocketHandle)
     sslSetAcceptState(conn.ssl)
     let _ = do_ssl sslDoHandshake(conn.ssl)
+  dump "accepted " & $conn
   conn
 
 
@@ -147,9 +181,13 @@ proc read*(conn: Conn, n: int): string {.cps:C.} =
   return s
 
 
-proc close*(conn: Conn) =
+proc close*(conn: Conn) {.cps:C.} =
   # Close the conn
   if conn.fd != -1:
+    debug "closed " & $conn
     checkSyscall posix.close(conn.fd)
     conn.fd = -1
+  if conn.ssl != nil:
+    SSL_free(conn.ssl)
+    conn.ssl = nil
 

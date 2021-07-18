@@ -12,7 +12,7 @@ proc client(url: string) {.cps:C.} =
   try:
     let client = httpClient.newClient()
     let rsp = client.get(url)
-    dump $rsp
+    debug $rsp
     let body = client.readBody(rsp)
   except OSError as e:
     warn "Could not connect to " & url & ": " & e.msg
@@ -22,6 +22,7 @@ proc ticker() {.cps:C.} =
   while true:
     debug "tick"
     sleep(1.0)
+    GC_fullCollect()
 
 # Offload blocking os.sleep() to a different thread
 proc blocker() {.cps:C.} =
@@ -51,11 +52,11 @@ proc runStuff() {.cps:C.} =
   info("CpsTest firing up")
   spawn newHttpServer().listenAndServe("::", "8080")
   spawn newHttpServer().listenAndServe("::", "8443", "cert.pem")
-  spawn client("https://127.0.0.1:8443")
-  #spawn client("https://zevv.nl/")
+  sleep(0.1)
+  spawn client("https://localhost:8443")
   spawn ticker()
-  spawn blocker()
-  spawn doMatrix()
+  #spawn blocker()
+  #spawn doMatrix()
   spawn doProcess()
 
 
