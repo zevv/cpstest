@@ -53,6 +53,7 @@ proc doRequest(hs: HttpServer, br: Breader, bw: Bwriter) {.cps:C.} =
   
   inc hs.stats.requestCount
  
+
 proc doConnection(hs: HttpServer, conn: Conn) {.cps:C.} =
   inc hs.stats.connectionCount
   let br = newBreader(conn)
@@ -60,6 +61,7 @@ proc doConnection(hs: HttpServer, conn: Conn) {.cps:C.} =
   while not br.eof and not bw.eof:
     doRequest(hs, br, bw)
   conn.close()
+
 
 proc doService(hs: HttpServer) {.cps:C.} =
   var stats: HttpServerStats
@@ -70,7 +72,8 @@ proc doService(hs: HttpServer) {.cps:C.} =
       info $stats.repr
     sleep(1)
 
-proc listenAndServe*(hs: HttpServer, port: int) {.cps:C.} =
+
+proc listenAndServe*(hs: HttpServer, port: int, certfile="") {.cps:C.} =
   hs.running = true
   
   info("Starting HTTP server on port " & $port)
@@ -83,6 +86,9 @@ proc listenAndServe*(hs: HttpServer, port: int) {.cps:C.} =
   let connServer = listen(port)
   while true:
     iowait(connServer, POLLIN)
-    let conn = connServer.accept()
-    spawn hs.doConnection(conn)
+    try:
+      let conn = connServer.accept(certfile)
+      spawn hs.doConnection(conn)
+    except OsError:
+      warn getCurrentExceptionMsg()
 

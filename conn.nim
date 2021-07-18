@@ -1,7 +1,7 @@
 
 # Little async socket library, supports TCP and TLS
 
-import std/[posix]
+import std/[posix, os]
 import openssl
 import cps
 import types, evq, resolver
@@ -10,11 +10,12 @@ type
 
   Conn* = ref object
     fd*: cint
-    ctx: SslCtx
     ssl: SslPtr
 
   DialProto = enum
     dpTcp, dpTls
+    
+
 
 proc newConn*(): Conn =
   Conn()
@@ -22,6 +23,7 @@ proc newConn*(): Conn =
 
 proc newConn*(fd: cint): Conn =
   Conn(fd: fd)
+
 
 proc listen*(port: int): Conn =
   var sa: Sockaddr_in6
@@ -36,18 +38,30 @@ proc listen*(port: int): Conn =
   return Conn(fd: fd.cint)
 
 
-proc sslReadWrite(conn: Conn, r: cint) {.cps:C.} =
-  let r = SSL_get_error(conn.ssl, r)
+proc handleSslRet(conn: Conn, ret: cint): int {.cps:C.} =
+  let r = SSL_get_error(conn.ssl, ret)
   case r:
     of SSL_ERROR_SSL:
       let err = ERR_get_error();
-      echo "ssl error: ", ERR_error_string(err, nil)
+      raise newException(OSError, $Err_error_string(err, nil))
     of SSL_ERROR_WANT_READ:
       iowait(conn, POLLIN)
     of SSL_ERROR_WANT_WRITE:
       iowait(conn, POLLOUT)
+    of SSL_ERROR_SYSCALL:
+      raiseOSError(osLastError())
     else:
       echo "unknown error ", r
+  r
+
+
+proc sslHandshake(conn: Conn) {.cps:C.} =
+  while true:
+    let ret = sslDoHandshake(conn.ssl)
+    if ret == 1:
+      break
+    else:
+      let _ = conn.handleSslRet(ret)
 
 
 proc dial*(host: string, service: string, proto: DialProto = dpTcp): Conn {.cps:C.}=
@@ -76,28 +90,29 @@ proc dial*(host: string, service: string, proto: DialProto = dpTcp): Conn {.cps:
 
   # Handle SSL handshake
   if service == "https" or proto == dpTls:
-    conn.ctx = SSL_CTX_new(SSLv23_client_method())
-    #SSL_CTX_set_verify(conn.ctx, SSL_VERIFY_NONE, nil)
-    conn.ssl = SSL_new(conn.ctx)
+    let ctx = SSL_CTX_new(SSLv23_method())
+    conn.ssl = SSL_new(ctx)
     discard SSL_set_fd(conn.ssl, conn.fd.SocketHandle)
     sslSetConnectstate(conn.ssl)
-
-    while true:
-      let r = sslDoHandshake(conn.ssl)
-      if r == 0:
-        raise newException(OSError, $ERR_error_string(SSL_get_error(conn.ssl, r).culong, nil))
-      if r == 1:
-        break
-      if r < 0:
-        conn.sslReadWrite(r)
+    sslHandshake(conn)
   conn
 
 
-proc accept*(conn: Conn): Conn =
+proc accept*(sconn: Conn, certfile=""): Conn {.cps:C.} =
   var sa: Sockaddr_in6
   var saLen: SockLen
-  let fd = posix.accept4(conn.fd.SocketHandle, cast[ptr SockAddr](sa.addr), saLen.addr, O_NONBLOCK)
-  Conn(fd: fd.cint)
+  let fd = posix.accept4(sconn.fd.SocketHandle, cast[ptr SockAddr](sa.addr), saLen.addr, O_NONBLOCK)
+  checkSyscall fd.cint
+  var conn = Conn(fd: fd.cint)
+  if certfile != "":
+    let ctx = SSL_CTX_new(SSLv23_method())
+    discard SSL_CTX_use_certificate_chain_file(ctx, certFile)
+    discard SSL_CTX_use_PrivateKey_file(ctx, certFile, SSL_FILETYPE_PEM)
+    conn.ssl = SSL_new(ctx)
+    discard SSL_set_fd(conn.ssl, conn.fd.SocketHandle)
+    sslSetAcceptState(conn.ssl)
+    sslHandshake(conn)
+  conn
 
 
 proc write*(conn: Conn, s: string): int {.cps:C.} =
@@ -108,7 +123,7 @@ proc write*(conn: Conn, s: string): int {.cps:C.} =
         result = r
         break
       else:
-        conn.sslReadWrite(r)
+        let _ = conn.handleSslRet(r)
   else:
     iowait(conn, POLLOUT)
     result = posix.write(conn.fd, s[0].unsafeAddr, s.len)
@@ -123,7 +138,7 @@ proc read*(conn: Conn, n: int): string {.cps:C.} =
         s.setLen r
         break
       else:
-        conn.sslReadWrite(r)
+        let _ = conn.handleSslRet(r)
   else:
     iowait(conn, POLLIN)
     let r = posix.read(conn.fd, s[0].addr, n)
