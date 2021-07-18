@@ -76,8 +76,6 @@ proc doService(hs: HttpServer) {.cps:C.} =
 proc listenAndServe*(hs: HttpServer, host: string, service: string, certfile="") {.cps:C.} =
   hs.running = true
   
-  info "Starting HTTP server on " & host & " " & service
-
   # Spawn a separate thread for periodic service work
   spawn hs.doService()
 

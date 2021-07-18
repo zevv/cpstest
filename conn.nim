@@ -31,7 +31,7 @@ proc getName*(sa: ptr Sockaddr, salen: SockLen): string =
   discard posix.getnameinfo(sa, salen,
                     host[0].addr,host.len.SockLen,
                     serv[0].addr, serv.len.SockLen,
-                    NI_NUMERICHOST)
+                    NI_NUMERICHOST or NI_NUMERICSERV)
   if sa.sa_family.cint == AF_INET6: host = "[" & host & "]"
   result = host & ":" & serv
 
@@ -41,7 +41,7 @@ proc `$`*(sas: Sockaddr_storage): string =
 
 # Handle SSL function call return codes
 
-proc handle_ssl_ret(conn: Conn, ret: cint) {.cps:C.} =
+proc do_ssl_aux(conn: Conn, ret: cint) {.cps:C.} =
   let r = SSL_get_error(conn.ssl, ret)
   case r:
     of SSL_ERROR_SSL:
@@ -65,22 +65,16 @@ template do_ssl(stmt: typed): int =
     ret = stmt
     if ret >= 0:
       break
-    handle_ssl_ret(conn, ret)
+    do_ssl_aux(conn, ret)
   ret
 
 
-proc newConn*(fd: cint, name: string): Conn =
-  Conn(fd: fd, name: name)
-
-proc newConn*(fd: cint): Conn =
-  newConn(fd, "-")
-
-proc newConn*(): Conn =
-  newConn(-1, "-")
+proc newConn*(fd: cint = -1, name: string = ""): Conn {.cps:C.} =
+  result = Conn(fd: fd, name: name)
+  dump "$1: new", result
 
 
 proc listen*(host: string, service: string, certfile: string = ""): Conn {.cps:C.} =
-  debug "listening on " & host & " " & service
 
   # Resolve host and service
   var ress = getaddrinfo(host, service)
@@ -94,6 +88,8 @@ proc listen*(host: string, service: string, certfile: string = ""): Conn {.cps:C
   checkSyscall listen(fd, SOMAXCONN)
   let name = getname(res.ai_addr, res.ai_addrlen)
   let conn = newConn(fd.cint, name)
+
+  dump "$1: listen", conn
 
   # Create SSL context if cert given
   if certfile != "":
@@ -115,6 +111,8 @@ proc dial*(host: string, service: string, secure: bool): Conn {.cps:C.}=
   let fd = socket(res.ai_family, res.ai_socktype or O_NONBLOCK, 0)
   let name = getname(res.ai_addr, res.ai_addrlen)
   let conn = newConn(fd.cint, name)
+
+  dump "$1: connect", conn
   var rc = connect(fd, res.ai_addr, res.ai_addrlen)
 
   # non-blocking connect: backoff until POLLOUT and get the result with
@@ -154,7 +152,7 @@ proc accept*(sconn: Conn): Conn {.cps:C.} =
     discard SSL_set_fd(conn.ssl, conn.fd.SocketHandle)
     sslSetAcceptState(conn.ssl)
     let _ = do_ssl sslDoHandshake(conn.ssl)
-  dump "accepted " & $conn
+  dump "$1: accepted", conn
   conn
 
 
@@ -183,8 +181,8 @@ proc read*(conn: Conn, n: int): string {.cps:C.} =
 
 proc close*(conn: Conn) {.cps:C.} =
   # Close the conn
+  dump "$1: close", conn
   if conn.fd != -1:
-    debug "closed " & $conn
     checkSyscall posix.close(conn.fd)
     conn.fd = -1
   if conn.ssl != nil:

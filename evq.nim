@@ -2,7 +2,7 @@
 # Minimal event queue implementation supporting a work queue, I/O and timers
 
 
-import std/[tables,heapqueue,deques,posix,epoll,monotimes,locks,sets]
+import std/[tables,heapqueue,deques,posix,epoll,monotimes,locks,sets,strutils]
 import cps
 import types
 
@@ -37,6 +37,12 @@ proc push*(evq: Evq, c: C) =
   evq.work.addLast c
 
 
+proc sleep*(c: C, delay: float): C {.cpsMagic.} =
+  ## Suspend continuation until timer expires
+  assert c.evq != nil
+  c.evq.timers.push EvqTimer(c: c, time: c.evq.now + delay)
+
+
 proc iowait*(c: C, fd: cint, events: int): C {.cpsMagic.} =
   ## Suspend continuation until I/O event triggered
   assert c.evq != nil
@@ -51,19 +57,16 @@ proc iowait*[T](c: C, conn: T, events: int): C {.cpsMagic.} =
 
 proc sigwait*(signo: cint) {.cps:C.} =
   ## Suspend contination until signal received
-  var mask, mask2: Sigset
-  checkSyscall sigemptyset(mask)
-  checkSyscall sigaddset(mask, signo)
-  checkSyscall sigprocmask(SIG_BLOCK, mask, mask2)
-  let fd = signalfd(-1, mask, O_CLOEXEC or O_NONBLOCK).cint
-  iowait fd, POLLIN
+  when false:
+    var mask, mask2: Sigset
+    checkSyscall sigemptyset(mask)
+    checkSyscall sigaddset(mask, signo)
+    checkSyscall sigprocmask(SIG_BLOCK, mask, mask2)
+    let fd = signalfd(-1, mask, O_CLOEXEC or O_NONBLOCK).cint
+    iowait fd, POLLIN
+  else:
+    sleep(1.0)
   #posix.close fd
-
-
-proc sleep*(c: C, delay: float): C {.cpsMagic.} =
-  ## Suspend continuation until timer expires
-  assert c.evq != nil
-  c.evq.timers.push EvqTimer(c: c, time: c.evq.now + delay)
 
 
 proc jield*(c: C): C {.cpsMagic.} =
@@ -114,25 +117,9 @@ template spawn*(evq: Evq, t: untyped) =
 
 
 proc getLogger*(c: C): Logger {.cpsVoodoo.} =
+  ## Get the logger instance for the current event queue
   assert c.evq != nil
   c.evq.logger
-
-# Logging shortcuts, working on the evq's logging context
-
-template make(mname, mlevel: untyped) =
-  template mname*(msg: string) =
-    mixin log_tag
-    let l = getLogger()
-    if mlevel >= l.level:
-      l.log(mlevel, log_tag, msg)
-
-make(dump,  llDmp)
-make(debug, llDbg)
-make(info,  llInf)
-make(test,  llTst)
-make(warn,  llWrn)
-make(err,   llErr)
-
 
 
 # Implementation

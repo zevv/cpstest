@@ -51,12 +51,14 @@ proc log*(l: Logger, level: LogLevel, tag: string, msg: string) {.cps:C.} =
   l.queue.addFirst rec
   l.work()
 
+# Logging shortcuts, working on the evq's logging context
 
 template make(mname, mlevel: untyped) =
-  template mname*(l: Logger, msg: string) =
+  template mname*(msg: string, args: varargs[string, `$`]) =
     mixin log_tag
+    let l = getLogger()
     if mlevel >= l.level:
-      l.log(mlevel, log_tag, msg)
+      l.log(mlevel, log_tag, msg % args)
 
 make(dump,  llDmp)
 make(debug, llDbg)
@@ -64,3 +66,5 @@ make(info,  llInf)
 make(test,  llTst)
 make(warn,  llWrn)
 make(err,   llErr)
+
+

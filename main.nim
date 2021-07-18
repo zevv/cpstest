@@ -17,35 +17,41 @@ proc client(url: string) {.cps:C.} =
   except OSError as e:
     warn "Could not connect to " & url & ": " & e.msg
 
+
 # A simple periodic ticker
 proc ticker() {.cps:C.} =
-  while true:
-    debug "tick"
+  var n = 0
+  while n < 5:
     sleep(1.0)
-    GC_fullCollect()
+    inc n
+    debug "tick $1", n
+
 
 # Offload blocking os.sleep() to a different thread
 proc blocker() {.cps:C.} =
-  while true:
-    debug "block"
-    onThread:
-      os.sleep(4000)
-    jield()
+  debug "blocker start"
+  onThread:
+    os.sleep(4000)
+  debug "blocker done"
+
 
 # Login to a matrix server
 proc doMatrix() {.cps:C.} =
   let mc = newMatrixClient("matrix.org")
   mc.login("zevver", os.getenv("matrix_password"))
 
+
 # Spawn a subprocess, do some stdin/stdout and wait for it to die
 proc doProcess() {.cps:C.} =
   info "subprocess starting"
-  let p = runProcess("/usr/bin/rev", @[])
+  let p = process.start("/usr/bin/printenv", @[])
   let _ = p.stdin.write("Reverse me")
   p.stdin.close()
-  info "subprocess said: " & p.stdout.read(1024)
-  p.wait()
-  info "subprocess done"
+  let d = p.stdout.read(1024)
+  echo d
+  let status = p.wait()
+  info "subprocess done, status: $1", status
+
 
 # Run all kinds of stuff
 proc runStuff() {.cps:C.} =
@@ -55,8 +61,8 @@ proc runStuff() {.cps:C.} =
   sleep(0.1)
   spawn client("https://localhost:8443")
   spawn ticker()
-  #spawn blocker()
-  #spawn doMatrix()
+  spawn blocker()
+  spawn doMatrix()
   spawn doProcess()
 
 
