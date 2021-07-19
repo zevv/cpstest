@@ -35,6 +35,7 @@ proc reaper(p: Process) {.cps:C.} =
     if r == p.pid:
       break
     else:
+      # TODO there's a race here
       sigwait SIGCHLD
 
   p.stdin.close()
