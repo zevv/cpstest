@@ -77,8 +77,7 @@ proc newConn*(fd: cint = -1, name: string = ""): Conn {.cps:C.} =
 proc listen*(host: string, service: string, certfile: string = ""): Conn {.cps:C.} =
 
   # Resolve host and service
-  var ress = getaddrinfo(host, service)
-  let res = ress[0]
+  var res = getaddrinfo(host, service)[0]
   var yes: int = 1
 
   # Bind and listen socket
