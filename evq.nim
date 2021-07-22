@@ -37,14 +37,14 @@ proc push*(evq: Evq, c: C) =
   evq.work.addLast c
 
 
-proc sleep*(c: C, delay: float): C {.cpsMagic.} =
-  ## Suspend continuation until timer expires
+proc sleep*(c: C, timeout: float): C {.cpsMagic.} =
+  ## Suspend continuation until the given timeout expires
   assert c.evq != nil
-  c.evq.timers.push EvqTimer(c: c, time: c.evq.now + delay)
+  c.evq.timers.push EvqTimer(c: c, time: c.evq.now + timeout)
 
 
 proc iowait*(c: C, fd: cint, events: int): C {.cpsMagic.} =
-  ## Suspend continuation until I/O event triggered
+  ## Suspend continuation until I/O event triggered on the given fd
   assert c.evq != nil
   c.evq.ios[fd] = EvqIo(fd: fd, c: c)
   var ee = EpollEvent(events: events.uint32, data: EpollData(u64: fd.uint64))
@@ -52,21 +52,20 @@ proc iowait*(c: C, fd: cint, events: int): C {.cpsMagic.} =
 
 
 proc iowait*[T](c: C, conn: T, events: int): C {.cpsMagic.} =
+  ## Suspend continuation until I/O event triggered on the given conn
   iowait(c, conn.fd, events)
 
 
 proc sigwait*(signo: cint) {.cps:C.} =
-  ## Suspend contination until signal received
-  when false:
-    var mask, mask2: Sigset
-    checkSyscall sigemptyset(mask)
-    checkSyscall sigaddset(mask, signo)
-    checkSyscall sigprocmask(SIG_BLOCK, mask, mask2)
-    let fd = signalfd(-1, mask, O_CLOEXEC or O_NONBLOCK).cint
-    iowait fd, POLLIN
-  else:
-    sleep(1.0)
-  #posix.close fd
+  ## Suspend contination until the signal has been received
+  var mask, mask2: Sigset
+  checkSyscall sigemptyset(mask)
+  checkSyscall sigaddset(mask, signo)
+  checkSyscall sigprocmask(SIG_BLOCK, mask, mask2)
+  let fd = signalfd(-1, mask, O_CLOEXEC or O_NONBLOCK).cint
+  checkSyscall fd
+  iowait fd, POLLIN
+  checkSyscall posix.close(fd.cint)
 
 
 proc jield*(c: C): C {.cpsMagic.} =

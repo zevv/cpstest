@@ -54,14 +54,14 @@ proc doProcess() {.cps:C.} =
 
 # Run all kinds of stuff
 proc runStuff() {.cps:C.} =
-  info("CpsTest firing up")
-  spawn newHttpServer().listenAndServe("::", "8080")
-  spawn newHttpServer().listenAndServe("::", "8443", "cert.pem")
-  sleep(0.1)
-  spawn client("https://localhost:8443")
-  spawn ticker()
-  spawn blocker()
-  spawn doMatrix()
+  #info("CpsTest firing up")
+  #spawn newHttpServer().listenAndServe("::", "8080")
+  #spawn newHttpServer().listenAndServe("::", "8443", "cert.pem")
+  #sleep(0.1)
+  #spawn client("https://localhost:8443")
+  #spawn ticker()
+  #spawn blocker()
+  #spawn doMatrix()
   spawn doProcess()
 
 

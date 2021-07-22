@@ -29,14 +29,14 @@ proc resumeWaiting(c: C, p: Process) {.cpsVoodoo.} =
 
 
 proc reaper(p: Process) {.cps:C.} =
+
   while true:
-    let r = posix.waitpid(p.pid, p.status, WNOHANG)
-    checkSyscall r
-    if r == p.pid:
-      break
-    else:
-      # TODO there's a race here
-      sigwait SIGCHLD
+    if p.pid != 0:
+      let r = posix.waitpid(p.pid, p.status, WNOHANG)
+      checkSyscall r
+      if r == p.pid:
+        break
+    sigwait SIGCHLD
 
   p.stdin.close()
   p.stdout.close()
@@ -53,12 +53,16 @@ proc start*(pc: ProcessCtx): Process {.cps:C.} =
   var fd: array[3, array[2, cint]]
   for i in 0..2:
     checkSyscall posix.pipe(fd[i])
+ 
+  # Create process object and spawn reaper
+  let p = Process()
+  spawn reaper(p)
 
   # Fork subprocess
-  let pid = posix.fork()
-  checkSyscall pid
+  p.pid = posix.fork()
+  checkSyscall p.pid
 
-  if pid == 0:
+  if p.pid == 0:
     # Dup stdin/stdout/stderr to 0/1/2
     checkSyscall posix.dup2(fd[0][0], 0)
     checkSyscall posix.dup2(fd[1][1], 1)
@@ -82,21 +86,16 @@ proc start*(pc: ProcessCtx): Process {.cps:C.} =
     let r = posix.execv(pc.cmd, cargs)
     posix.exitnow(-1)
 
-  debug "process started pid: $1, cmd: '$2'", pid, pc.cmd
+  debug "process started pid: $1, cmd: '$2'", p.pid, pc.cmd
 
   checkSyscall posix.close fd[0][0]
   checkSyscall posix.close fd[1][1]
   checkSyscall posix.close fd[2][1]
 
-  let p = Process(
-    pid: pid,
-    stdin:  newConn(fd[0][1], "pipe"),
-    stdout: newConn(fd[1][0], "pipe"),
-    stderr: newConn(fd[2][0], "pipe"),
-  )
+  p.stdin = newConn(fd[0][1], "pipe")
+  p.stdout = newConn(fd[1][0], "pipe")
+  p.stderr = newConn(fd[2][0], "pipe")
  
-  # Spawn reaper coroutine
-  spawn reaper(p)
   return p
 
 
