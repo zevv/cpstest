@@ -140,8 +140,9 @@ proc dial*(host: string, service: string, secure: bool): Conn {.cps:C.}=
 proc accept*(sconn: Conn): Conn {.cps:C.} =
   var sa: Sockaddr_storage
   var saLen: SockLen = sizeof(sa).SockLen
-  let fd = posix.accept4(sconn.fd.SocketHandle, cast[ptr SockAddr](sa.addr), saLen.addr, O_NONBLOCK)
+  let fd = posix.accept(sconn.fd.SocketHandle, cast[ptr SockAddr](sa.addr), saLen.addr)
   checkSyscall fd.cint
+  checkSyscall fcntl(fd.cint, F_SETFL, O_NONBLOCK)
   let name = getName(cast[ptr Sockaddr](sa.addr), saLen)
   var conn = newConn(fd.cint, name)
   # Setup SSL if the parent conn has a SSL context
