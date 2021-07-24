@@ -28,14 +28,14 @@ proc request*(client: Client, meth: string, url: string, body: string = ""): Res
   let secure = req.uri.scheme == "https"
   client.conn = conn.dial(req.uri.hostname, port, secure)
   client.bio = newBio(client.conn)
-  req.write(client.bio)
+  client.bio.write(req)
   if body.len > 0:
-    client.bio.write(body)
+    discard client.bio.write(body)
   client.bio.flush()
 
   # Handle response
   var rsp = newResponse()
-  rsp.read(client.bio)
+  client.bio.read(rsp)
   
   return rsp
 

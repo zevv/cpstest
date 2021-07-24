@@ -26,7 +26,7 @@ proc doRequest(hs: HttpServer, bio: Bio) {.cps:C.} =
 
   # Request
   let req = newRequest()
-  req.read(bio)
+  bio.read(req)
   if req.meth == "":
     return
   if req.contentLength > 0:
@@ -41,10 +41,10 @@ proc doRequest(hs: HttpServer, bio: Bio) {.cps:C.} =
   rsp.keepAlive = req.keepAlive
   rsp.headers.add("Date", hs.date)
   rsp.headers.add("Server", "cpstest")
-  rsp.write(bio)
+  bio.write(rsp)
 
   if rsp.contentLength > 0:
-    bio.write(body)
+    discard bio.write(body)
   bio.flush()
 
   if not req.keepAlive:

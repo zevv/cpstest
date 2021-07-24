@@ -39,7 +39,7 @@ proc add*(headers: Headers, key: string, val: string) =
     headers.headers[key] = @[]
   headers.headers[key].add val
 
-proc read*(headers: Headers, bio: Bio) {.cps:C.} =
+proc read*(bio: Bio, headers: Headers) {.cps:C.} =
   while true:
     let line = bio.readLine()
     if line.len() == 0:
@@ -68,12 +68,14 @@ proc newRequest*(): Request {.cps:C.} =
     headers: Headers()
   )
 
+
 proc newRequest*(meth: string, url: string): Request =
   result = Request(
     meth: meth,
     headers: http.Headers(),
   )
   parseUri(url, result.uri)
+
 
 proc `$`*(req: Request): string =
   var path = req.uri.path
@@ -86,7 +88,8 @@ proc `$`*(req: Request): string =
     result.add("Content-Length: " & $req.contentLength & "\r\n")
   result.add $req.headers
 
-proc read*(req: Request, bio: Bio) {.cps:C.} =
+
+proc read*(bio: Bio, req: Request) {.cps:C.} =
   let line = bio.readLine()
   if line == "":
     bio.close()
@@ -95,7 +98,7 @@ proc read*(req: Request, bio: Bio) {.cps:C.} =
   let (meth, target, version) = (ps[0], ps[1], ps[2])
 
   req.meth = meth
-  req.headers.read(bio)
+  bio.read(req.headers)
   
   req.keepAlive = req.headers.get("Connection") == "Keep-Alive"
   let host = req.headers.get("Host")
@@ -106,8 +109,9 @@ proc read*(req: Request, bio: Bio) {.cps:C.} =
   
   parseUri("http://" & host & target, req.uri)
 
-proc write*(req: Request, bio: Bio) {.cps:C.} =
-  bio.write($req)
+
+proc write*(bio: Bio, req: Request) {.cps:C.} =
+  discard bio.write($req)
 
 
 #
@@ -120,6 +124,7 @@ proc newResponse*(): Response =
     contentLength: -1,
   )
 
+
 proc `$`*(rsp: Response): string =
   result.add("HTTP/1.0 " & $rsp.statuscode & " OK\r\n")
   result.add("Content-Type: text/plain\r\n")
@@ -129,20 +134,20 @@ proc `$`*(rsp: Response): string =
     result.add("Connection: Keep-Alive\r\n")
   result.add $rsp.headers
 
-proc read*(rsp: Response, bio: Bio) {.cps:C.}=
+
+proc read*(bio: Bio, rsp: Response) {.cps:C.}=
   let line = bio.readLine()
   
   let ps = splitWhitespace(line, 3)
   rsp.statusCode = parseInt(ps[1])
   rsp.reason = ps[2]
-  rsp.headers.read(bio)
+  bio.read(rsp.headers)
   
   try:
     rsp.contentLength = parseInt(rsp.headers.get("Content-Length"))
   except:
     discard
 
-  
 
-proc write*(rsp: Response, bio: Bio) {.cps:C.} =
-  bio.write $rsp
+proc write*(bio: Bio, rsp: Response) {.cps:C.} =
+  discard bio.write $rsp
