@@ -45,7 +45,7 @@ proc doMatrix() {.cps:C.} =
 proc doProcess() {.cps:C.} =
   info "subprocess starting"
   let p = process.start("/usr/bin/rev", @[])
-  let _ = p.stdin.write("Reverse me")
+  discard p.stdin.write("Reverse me")
   p.stdin.close()
   info "subprocess said: " & p.stdout.read(1024)
   let status = p.wait()
@@ -54,14 +54,14 @@ proc doProcess() {.cps:C.} =
 
 # Run all kinds of stuff
 proc runStuff() {.cps:C.} =
-  #info("CpsTest firing up")
-  #spawn newHttpServer().listenAndServe("::", "8080")
-  #spawn newHttpServer().listenAndServe("::", "8443", "cert.pem")
-  #sleep(0.1)
-  #spawn client("https://localhost:8443")
-  #spawn ticker()
-  #spawn blocker()
-  #spawn doMatrix()
+  info("CpsTest firing up")
+  spawn newHttpServer().listenAndServe("::", "8080")
+  spawn newHttpServer().listenAndServe("::", "8443", "cert.pem")
+  sleep(0.1)
+  spawn client("https://localhost:8443")
+  spawn ticker()
+  spawn blocker()
+  spawn doMatrix()
   spawn doProcess()
 
 

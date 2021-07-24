@@ -51,11 +51,8 @@ proc readBody*(client: Client, rsp: Response): string {.cps:C.} =
       let n = client.br.readLine().parseHexInt()
       if n == 0:
         break
-      # TODO: #207
-      let b = client.br.read(n)
-      # TODO: #206
-      let _ = client.br.readLine()
-      result.add b
+      result.add client.br.read(n)
+      discard client.br.readLine()
   
 proc get*(client: Client, url: string): Response {.cps:C} =
   client.request("GET", url)

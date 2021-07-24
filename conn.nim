@@ -151,7 +151,7 @@ proc accept*(sconn: Conn): Conn {.cps:C.} =
     conn.ssl = SSL_new(conn.ctx)
     discard SSL_set_fd(conn.ssl, conn.fd.SocketHandle)
     sslSetAcceptState(conn.ssl)
-    let _ = do_ssl sslDoHandshake(conn.ssl)
+    discard do_ssl sslDoHandshake(conn.ssl)
   dump "$1: accepted", conn
   conn
 
