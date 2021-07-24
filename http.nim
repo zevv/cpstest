@@ -1,7 +1,7 @@
 
 import std/[tables,strutils,uri]
 import cps
-import bconn, types
+import bio, types
 
 type
   Headers* = ref object
@@ -39,9 +39,9 @@ proc add*(headers: Headers, key: string, val: string) =
     headers.headers[key] = @[]
   headers.headers[key].add val
 
-proc read*(headers: Headers, br: Breader) {.cps:C.} =
+proc read*(headers: Headers, bio: Bio) {.cps:C.} =
   while true:
-    let line = br.readLine()
+    let line = bio.readLine()
     if line.len() == 0:
       break
     let ps = line.split(": ", 2)
@@ -86,16 +86,16 @@ proc `$`*(req: Request): string =
     result.add("Content-Length: " & $req.contentLength & "\r\n")
   result.add $req.headers
 
-proc read*(req: Request, br: Breader) {.cps:C.} =
-  let line = br.readLine()
+proc read*(req: Request, bio: Bio) {.cps:C.} =
+  let line = bio.readLine()
   if line == "":
-    br.close()
+    bio.close()
     return
   let ps = splitWhitespace(line, 3)
   let (meth, target, version) = (ps[0], ps[1], ps[2])
 
   req.meth = meth
-  req.headers.read(br)
+  req.headers.read(bio)
   
   req.keepAlive = req.headers.get("Connection") == "Keep-Alive"
   let host = req.headers.get("Host")
@@ -106,8 +106,8 @@ proc read*(req: Request, br: Breader) {.cps:C.} =
   
   parseUri("http://" & host & target, req.uri)
 
-proc write*(req: Request, bw: BWriter) {.cps:C.} =
-  bw.write($req)
+proc write*(req: Request, bio: Bio) {.cps:C.} =
+  bio.write($req)
 
 
 #
@@ -129,13 +129,13 @@ proc `$`*(rsp: Response): string =
     result.add("Connection: Keep-Alive\r\n")
   result.add $rsp.headers
 
-proc read*(rsp: Response, br: BReader) {.cps:C.}=
-  let line = br.readLine()
+proc read*(rsp: Response, bio: Bio) {.cps:C.}=
+  let line = bio.readLine()
   
   let ps = splitWhitespace(line, 3)
   rsp.statusCode = parseInt(ps[1])
   rsp.reason = ps[2]
-  rsp.headers.read(br)
+  rsp.headers.read(bio)
   
   try:
     rsp.contentLength = parseInt(rsp.headers.get("Content-Length"))
@@ -144,5 +144,5 @@ proc read*(rsp: Response, br: BReader) {.cps:C.}=
 
   
 
-proc write*(rsp: Response, bw: Bwriter) {.cps:C.} =
-  bw.write $rsp
+proc write*(rsp: Response, bio: Bio) {.cps:C.} =
+  bio.write $rsp

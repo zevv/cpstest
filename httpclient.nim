@@ -1,14 +1,13 @@
 
 import std/[uri, strutils]
 import cps
-import bconn, types, conn, http
+import types, conn, http, bio
 
 type
   Client = ref object
     maxFollowRedirects: int
     conn: Conn
-    br: Breader
-    bw: Bwriter
+    bio: Bio
 
 proc newClient*(): Client =
   Client(
@@ -28,31 +27,30 @@ proc request*(client: Client, meth: string, url: string, body: string = ""): Res
     port = req.uri.scheme
   let secure = req.uri.scheme == "https"
   client.conn = conn.dial(req.uri.hostname, port, secure)
-  client.bw = newBwriter(client.conn)
-  client.br = newBreader(client.conn)
-  req.write(client.bw)
+  client.bio = newBio(client.conn)
+  req.write(client.bio)
   if body.len > 0:
-    client.bw.write(body)
-  client.bw.flush()
+    client.bio.write(body)
+  client.bio.flush()
 
   # Handle response
   var rsp = newResponse()
-  rsp.read(client.br)
+  rsp.read(client.bio)
   
   return rsp
 
 proc readBody*(client: Client, rsp: Response): string {.cps:C.} =
   if rsp.contentLength > 0:
     # Get body with content length
-    result = client.br.read(rsp.contentLength)
+    result = client.bio.read(rsp.contentLength)
   elif rsp.headers.get("transfer-encoding") == "chunked":
     # Do de-chunking
     while true:
-      let n = client.br.readLine().parseHexInt()
+      let n = client.bio.readLine().parseHexInt()
       if n == 0:
         break
-      result.add client.br.read(n)
-      discard client.br.readLine()
+      result.add client.bio.read(n)
+      discard client.bio.readLine()
   
 proc get*(client: Client, url: string): Response {.cps:C} =
   client.request("GET", url)
