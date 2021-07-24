@@ -17,6 +17,8 @@ type
 
   Conn* = ref ConnObj
 
+  TlsMode = enum tlsClient, tlsServer
+
 
 proc `$`*(conn: Conn | ConnObj): string =
   result.add "conn(" & $conn.fd
@@ -99,6 +101,20 @@ proc listen*(host: string, service: string, certfile: string = ""): Conn {.cps:C
   result = conn
 
 
+proc startTls*(conn: Conn, ctx: SslCtx, mode: TlsMode) {.cps:C.} =
+  ## Switch the connection to TLS by adding a TLS context and performing
+  ## the handshake
+  assert conn.ctx == nil
+  conn.ctx = ctx
+  conn.ssl = SSL_new(conn.ctx)
+  discard SSL_set_fd(conn.ssl, conn.fd.SocketHandle)
+  if mode == tlsClient:
+    sslSetConnectstate(conn.ssl)
+  else:
+    sslSetAcceptState(conn.ssl)
+  discard do_ssl sslDoHandshake(conn.ssl)
+
+
 proc dial*(host: string, service: string, secure: bool): Conn {.cps:C.}=
   ## Dial establishes a TCP connection to the given host and service.
 
@@ -106,11 +122,10 @@ proc dial*(host: string, service: string, secure: bool): Conn {.cps:C.}=
   var ress = getaddrinfo(host, service)
   let res = ress[0]
 
-  # Create non-blocking socket and try to connect
+  # Create non-blocking socket and perform connect
   let fd = socket(res.ai_family, res.ai_socktype or O_NONBLOCK, 0)
   let name = getname(res.ai_addr, res.ai_addrlen)
   let conn = newConn(fd.cint, name)
-
   dump "$1: connect", conn
   var rc = connect(fd, res.ai_addr, res.ai_addrlen)
 
@@ -128,11 +143,8 @@ proc dial*(host: string, service: string, secure: bool): Conn {.cps:C.}=
 
   # Handle SSL handshake
   if secure:
-    conn.ctx = SSL_CTX_new(SSLv23_method())
-    conn.ssl = SSL_new(conn.ctx)
-    discard SSL_set_fd(conn.ssl, conn.fd.SocketHandle)
-    sslSetConnectstate(conn.ssl)
-    let _ = do_ssl sslDoHandshake(conn.ssl)
+    let ctx = SSL_CTX_new(SSLv23_method())
+    conn.startTls(ctx, tlsClient)
 
   result = conn
 
@@ -147,11 +159,7 @@ proc accept*(sconn: Conn): Conn {.cps:C.} =
   var conn = newConn(fd.cint, name)
   # Setup SSL if the parent conn has a SSL context
   if sconn.ctx != nil:
-    conn.ctx = sconn.ctx
-    conn.ssl = SSL_new(conn.ctx)
-    discard SSL_set_fd(conn.ssl, conn.fd.SocketHandle)
-    sslSetAcceptState(conn.ssl)
-    discard do_ssl sslDoHandshake(conn.ssl)
+    conn.startTls(sconn.ctx, tlsServer)
   dump "$1: accepted", conn
   conn
 
