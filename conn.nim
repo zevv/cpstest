@@ -1,5 +1,6 @@
 
-# Little async socket library, supports TCP and TLS
+# Little async socket library, supports TCP, TLS and AF_UNIX
+# sockets
 
 import std/[posix, os]
 import openssl
@@ -31,11 +32,12 @@ proc getName*(sa: ptr Sockaddr, salen: SockLen): string =
   var host = newString(posix.INET6_ADDRSTRLEN)
   var serv = newString(32)
   discard posix.getnameinfo(sa, salen,
-                    host[0].addr,host.len.SockLen,
+                    host[0].addr, host.len.SockLen,
                     serv[0].addr, serv.len.SockLen,
                     NI_NUMERICHOST or NI_NUMERICSERV)
   if sa.sa_family.cint == AF_INET6: host = "[" & host & "]"
   result = host & ":" & serv
+
 
 proc `$`*(sas: Sockaddr_storage): string =
   getName cast[ptr Sockaddr](sas.unsafeAddr), sizeof(sas).SockLen
@@ -77,19 +79,19 @@ proc newConn*(fd: cint = -1, name: string = ""): Conn {.cps:C.} =
 
 
 proc listen*(host: string, service: string, certfile: string = ""): Conn {.cps:C.} =
+  ## Bind and listen on a TCP port
 
   # Resolve host and service
   var res = getaddrinfo(host, service)[0]
-  var yes: int = 1
 
   # Bind and listen socket
+  var yes: int = 1
   let fd = socket(res.ai_family, SOCK_STREAM or O_NONBLOCK, 0)
   checkSyscall setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, yes.addr, sizeof(yes).SockLen)
   checkSyscall bindSocket(fd, res.ai_addr, res.ai_addrlen)
   checkSyscall listen(fd, SOMAXCONN)
   let name = getname(res.ai_addr, res.ai_addrlen)
   let conn = newConn(fd.cint, name)
-
   dump "$1: listen", conn
 
   # Create SSL context if cert given
@@ -98,6 +100,20 @@ proc listen*(host: string, service: string, certfile: string = ""): Conn {.cps:C
     discard SSL_CTX_use_certificate_chain_file(conn.ctx, certFile)
     discard SSL_CTX_use_PrivateKey_file(conn.ctx, certFile, SSL_FILETYPE_PEM)
 
+  result = conn
+
+
+proc listen*(path: string): Conn {.cps:C.} =
+  # Bind and listen on a Unix domain socket
+  var sun = Sockaddr_Un(sun_family: AF_UNIX.TSa_Family)
+  copyMem(sun.sun_path.addr, path[0].unsafeAddr, path.len)
+  let fd = socket(AF_UNIX, SOCK_STREAM or O_NONBLOCK, 0)
+  var yes: int = 1
+  checkSyscall setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, yes.addr, sizeof(yes).SockLen)
+  checkSyscall bindSocket(fd, cast[ptr Sockaddr](sun.addr), sizeof(sun).SockLen)
+  checkSyscall listen(fd, SOMAXCONN)
+  let conn = newConn(fd.cint, "unix:" & path)
+  dump "$1: listen", conn
   result = conn
 
 
@@ -115,41 +131,53 @@ proc startTls*(conn: Conn, ctx: SslCtx, mode: TlsMode) {.cps:C.} =
   discard do_ssl sslDoHandshake(conn.ssl)
 
 
-proc dial*(host: string, service: string, secure: bool): Conn {.cps:C.}=
-  ## Dial establishes a TCP connection to the given host and service.
-
-  # Resolve host and service
-  var ress = getaddrinfo(host, service)
-  let res = ress[0]
-
-  # Create non-blocking socket and perform connect
-  let fd = socket(res.ai_family, res.ai_socktype or O_NONBLOCK, 0)
-  let name = getname(res.ai_addr, res.ai_addrlen)
-  let conn = newConn(fd.cint, name)
+proc connect*(conn: Conn, sa: ptr SockAddr, salen: SockLen) {.cps:C.} =
+  ## Connect the conn to the given sockadder, potentially async
   dump "$1: connect", conn
-  var rc = connect(fd, res.ai_addr, res.ai_addrlen)
-
-  # non-blocking connect: backoff until POLLOUT and get the result with
-  # getsockopt(SO_ERROR)
+  var rc = posix.connect(conn.fd.SocketHandle, sa, salen)
   if rc == -1 and errno == EINPROGRESS:
     iowait(conn, POLLOUT)
     var e: cint
     var s = SockLen sizeof(e)
-    checkSyscall getsockopt(fd, SOL_SOCKET, SO_ERROR, addr(e), addr(s))
+    checkSyscall getsockopt(conn.fd.SocketHandle, SOL_SOCKET, SO_ERROR, addr(e), addr(s))
     if e != 0:
       raise newException(OSError, $strerror(e))
   else:
     checkSyscall rc
 
-  # Handle SSL handshake
+
+proc dial*(host: string, service: string, secure: bool): Conn {.cps:C.}=
+  ## Dial establishes a TCP connection to the given host and service.
+  var ress = getaddrinfo(host, service)
+  let res = ress[0]
+  # Create non-blocking socket
+  let fd = socket(res.ai_family, res.ai_socktype or O_NONBLOCK, 0)
+  let name = getname(res.ai_addr, res.ai_addrlen)
+  let conn = newConn(fd.cint, name)
+  # Perform connect, async
+  conn.connect(res.ai_addr, res.ai_addrlen)
+  # Do SSL handshake if needed
   if secure:
     let ctx = SSL_CTX_new(SSLv23_method())
     conn.startTls(ctx, tlsClient)
-
   result = conn
 
 
+proc dial*(path: string): Conn {.cps:C.} =
+  ## Create a unix socket and connect to the given path
+  var sun = Sockaddr_Un(sun_family: AF_UNIX.TSa_Family)
+  if path.len >= sun.sun_path.len:
+    raise newException(ValueError, "oversized path")
+  copyMem(sun.sun_path.addr, path[0].unsafeAddr, path.len)
+  let fd = socket(AF_UNIX, SOCK_STREAM or O_NONBLOCK, 0)
+  let conn = newConn(fd.cint, "unix:" & path)
+  conn.connect(cast[ptr Sockaddr](sun.addr), sizeof(sun).SockLen)
+  conn
+
+
 proc accept*(sconn: Conn): Conn {.cps:C.} =
+  ## Accept a connection on a conn, optionally performing a TLS handshake is
+  ## the socket has a TLS context
   var sa: Sockaddr_storage
   var saLen: SockLen = sizeof(sa).SockLen
   let fd = posix.accept(sconn.fd.SocketHandle, cast[ptr SockAddr](sa.addr), saLen.addr)

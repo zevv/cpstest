@@ -1,7 +1,11 @@
 
 # Main program
+#
+# This is just a bunch of snippets to test all the underlying
+# CPS and IO stuff
 
 from os import nil
+import posix
 import cps
 import types, evq, http, httpserver, httpclient, matrix, resolver, logger, process, conn
 
@@ -52,7 +56,27 @@ proc doProcess() {.cps:C.} =
   info "subprocess done, status: $1", status
 
 
-# Run all kinds of stuff
+# Little test with unix sockets
+
+proc doUnixServer(conn: Conn) {.cps:C.} =
+  while true:
+    iowait(conn, POLLIN)
+    let c = conn.accept()
+    info c.read(32)
+    c.close()
+
+proc unixSockets() {.cps:C.} =
+  discard unlink "/tmp/sock"
+  let sconn = listen("/tmp/sock")
+  spawn doUnixServer(sconn)
+  sleep(0.5)
+  let cconn = dial("/tmp/sock")
+  iowait(cconn, POLLOUT)
+  discard cconn.write("Hello")
+  cconn.close()
+
+
+# Run all the tests
 proc runStuff() {.cps:C.} =
   info("CpsTest firing up")
   spawn newHttpServer().listenAndServe("::", "8080")
@@ -63,6 +87,7 @@ proc runStuff() {.cps:C.} =
   spawn blocker()
   spawn doMatrix()
   spawn doProcess()
+  spawn unixSockets()
 
 
 var mylogger = newLogger(llDmp)
