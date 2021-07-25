@@ -22,6 +22,33 @@ type
     keepAlive*: bool
     body*: string
 
+  StatusCode = distinct int
+
+  ResponseWriter* = ref object
+    bio: Bio
+
+
+proc statusCodeStr(sc: int): string =
+  case sc
+  of 200: "200 Ok"
+  of 201: "201 Created"
+  of 403: "403 Forbidden"
+  of 404: "404 Not Found"
+  else: $sc
+
+# Chunked encoded writer
+
+proc newResponseWriter*(bio: Bio): ResponseWriter =
+  ResponseWriter(bio: bio)
+
+
+proc write*(rw: ResponseWriter, s: string) {.cps:C.} =
+  discard rw.bio.write tohex(s.len)
+  discard rw.bio.write("\r\n")
+  discard rw.bio.write(s)
+  discard rw.bio.write("\r\n")
+
+
 #
 # Headers
 #
@@ -126,12 +153,12 @@ proc newResponse*(): Response =
 
 
 proc `$`*(rsp: Response): string =
-  result.add("HTTP/1.0 " & $rsp.statuscode & " OK\r\n")
-  result.add("Content-Type: text/plain\r\n")
+  result.add "HTTP/1.0 " & statusCodeStr(rsp.statusCode) & "\r\n"
+  result.add "Content-Type: text/plain\r\n" 
   if rsp.contentLength > 0:
-    result.add("Content-Length: " & $rsp.contentLength & "\r\n")
+    result.add "Content-Length: " & $rsp.contentLength & "\r\n" 
   if rsp.keepAlive:
-    result.add("Connection: Keep-Alive\r\n")
+    result.add "Connection: Keep-Alive\r\n" 
   result.add $rsp.headers
 
 

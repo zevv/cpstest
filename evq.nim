@@ -73,6 +73,13 @@ proc jield*(c: C): C {.cpsMagic.} =
   c.evq.timers.push EvqTimer(c: c, time: c.evq.now)
 
 
+proc call*(c: C, c2: C): C {.cpsMagic.} =
+  ## Hack to perform a maual cps-cps call to a contininuation
+  c2.mom = c
+  c2.evq = c.evq
+  c2
+
+
 ## TODO: Threading is known to be wrong and unsafe
 
 proc threadFunc(t: EvqThread) {.thread.} =

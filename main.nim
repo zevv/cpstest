@@ -56,13 +56,22 @@ proc doProcess() {.cps:C.} =
   info "subprocess done, status: $1", status
 
 
+proc onHttpRoot(rw: http.ResponseWriter) {.cps:C.} =
+  rw.write("Hello, world!\r\n");
+
+proc genHttpRoot(rw: ResponseWriter): C =
+  whelp onHttpRoot(rw)
+
+
 # Run all the tests
 proc runStuff() {.cps:C.} =
   info("CpsTest firing up")
-  spawn newHttpServer().listenAndServe("::", "8080")
-  spawn newHttpServer().listenAndServe("::", "8443", "cert.pem")
+  let hs = newHttpServer()
+  hs.addPath "/hello", genHttpRoot
+  spawn hs.listenAndServe("::", "8080")
+  spawn hs.listenAndServe("::", "8443", "cert.pem")
   sleep(0.1)
-  spawn client("https://localhost:8443")
+  spawn client("https://localhost:8443/hello")
   spawn ticker()
   spawn blocker()
   spawn doMatrix()

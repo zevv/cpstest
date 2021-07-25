@@ -1,26 +1,45 @@
 
-import std/[times]
+import std/[times, tables]
 import cps
 import types, evq, conn, bio, http, logger
 
 const log_tag = "httpserver"
-
-let body = "hello\n"
 
 type
   HttpServer = ref object
     running: bool
     date: string
     stats: HttpServerStats
+    handlers: Table[string, HttpServerCallback]
 
   HttpServerStats = object
     connectionCount: int
     requestCount: int
 
+  HttpServerCallback = proc(rw: ResponseWriter): C
 
 
-proc newHttpServer*(): HttpServer =
-  HttpServer()
+proc doService(hs: HttpServer) {.cps:C.} =
+  var stats: HttpServerStats
+  while hs.running:
+    hs.date = now().utc().format("ddd, dd MMM yyyy HH:mm:ss 'GMT'")
+    if stats != hs.stats:
+      stats = hs.stats
+      info $stats.repr
+    sleep(1)
+
+
+proc newHttpServer*(): HttpServer {.cps:C.}=
+  let hs = HttpServer(running: true)
+  # Spawn a separate thread for periodic service work
+  spawn hs.doService()
+  hs
+
+
+proc addPath*(hs: HttpServer, path: string, handler: HttpServerCallback) {.cps:C.} =
+  hs.handlers[path] = handler
+  debug "addPath $1", path
+
 
 proc doRequest(hs: HttpServer, bio: Bio) {.cps:C.} =
 
@@ -32,19 +51,29 @@ proc doRequest(hs: HttpServer, bio: Bio) {.cps:C.} =
   if req.contentLength > 0:
     let reqBody = bio.read(req.contentLength)
 
-  dump($req)
+  dump $req
 
   # Response
   let rsp = newResponse()
-  rsp.contentLength = body.len
-  rsp.statusCode = 200
-  rsp.keepAlive = req.keepAlive
   rsp.headers.add("Date", hs.date)
   rsp.headers.add("Server", "cpstest")
-  bio.write(rsp)
+  rsp.keepAlive = req.keepAlive
 
-  if rsp.contentLength > 0:
-    discard bio.write(body)
+  if req.uri.path in hs.handlers:
+    rsp.statusCode = 200
+    rsp.headers.add("Transfer-Encoding", "chunked")
+    bio.write(rsp)
+    let rw = newResponseWriter(bio)
+    let c = hs.handlers[req.uri.path](rw)
+    call c
+    rw.write("")
+  else:
+    rsp.statusCode = 404
+    bio.write(rsp)
+
+
+  #if rsp.contentLength > 0:
+  #  discard bio.write(body)
   bio.flush()
 
   if not req.keepAlive:
@@ -62,24 +91,8 @@ proc doConnection(hs: HttpServer, conn: Conn) {.cps:C.} =
   conn.close()
 
 
-proc doService(hs: HttpServer) {.cps:C.} =
-  var stats: HttpServerStats
-  while hs.running:
-    hs.date = now().utc().format("ddd, dd MMM yyyy HH:mm:ss 'GMT'")
-    if stats != hs.stats:
-      stats = hs.stats
-      info $stats.repr
-    sleep(1)
-
-
 proc listenAndServe*(hs: HttpServer, host: string, service: string, certfile="") {.cps:C.} =
-  hs.running = true
-  
-  # Spawn a separate thread for periodic service work
-  spawn hs.doService()
-
-  # Create listening socket and spawn a new thread for each
-  # incoming connection
+  # Create listening socket and spawn a new thread for each incoming connection
   let connServer = listen(host, service, certfile)
   while true:
     iowait(connServer, POLLIN)
