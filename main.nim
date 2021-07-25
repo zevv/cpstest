@@ -11,6 +11,23 @@ import types, evq, http, httpserver, httpclient, matrix, resolver, logger, proce
 
 const log_tag = "main"
 
+# HTTP client serving on both HTTP and HTTPS
+
+proc onHttpRoot(rw: http.ResponseWriter) {.cps:C.} =
+  rw.write("Hello, world!\r\n");
+
+# This is clumsy, we need a better way for doing cps-compatible callbacks
+proc genHttpRoot(rw: ResponseWriter): C =
+  whelp onHttpRoot(rw)
+
+proc server() {.cps:C.} =
+  let hs = newHttpServer()
+  hs.addPath "/hello", genHttpRoot
+  spawn hs.listenAndServe("::", "8080")
+  spawn hs.listenAndServe("::", "8443", "cert.pem")
+  sleep(0.1)
+
+
 # Perform an async http request
 proc client(url: string) {.cps:C.} =
   try:
@@ -56,21 +73,10 @@ proc doProcess() {.cps:C.} =
   info "subprocess done, status: $1", status
 
 
-proc onHttpRoot(rw: http.ResponseWriter) {.cps:C.} =
-  rw.write("Hello, world!\r\n");
-
-proc genHttpRoot(rw: ResponseWriter): C =
-  whelp onHttpRoot(rw)
-
-
 # Run all the tests
 proc runStuff() {.cps:C.} =
   info("CpsTest firing up")
-  let hs = newHttpServer()
-  hs.addPath "/hello", genHttpRoot
-  spawn hs.listenAndServe("::", "8080")
-  spawn hs.listenAndServe("::", "8443", "cert.pem")
-  sleep(0.1)
+  spawn server()
   spawn client("https://localhost:8443/hello")
   spawn ticker()
   spawn blocker()
