@@ -16,7 +16,7 @@ type
     connectionCount: int
     requestCount: int
 
-  HttpServerCallback = proc(rw: ResponseWriter): C
+  HttpServerCallback* = proc(rw: ResponseWriter): C
 
 
 proc doService(hs: HttpServer) {.cps:C.} =

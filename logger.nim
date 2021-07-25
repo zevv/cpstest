@@ -7,7 +7,7 @@ import evq
 
 proc levelInfo(level: LogLevel): (string, string) =
   case level
-    of llDmp: ("dmp", "\e[33m")
+    of llDmp: ("dmp", "\e[30;1m")
     of llDbg: ("dbg", "\e[22m")
     of llInf: ("inf", "\e[1m")
     of llTst: ("tst", "\e[7m")

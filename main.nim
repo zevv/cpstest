@@ -12,19 +12,22 @@ import types, evq, http, httpserver, httpclient, matrix, resolver, logger, proce
 const log_tag = "main"
 
 
-# HTTP server serving on both HTTP port 8080 and HTTPS port 8443
-
-proc onHttpRoot(rw: http.ResponseWriter) {.cps:C.} =
-  rw.write("Hello, world!\r\n");
+proc onHttpRoot(body: string, rw: http.ResponseWriter) {.cps:C.} =
+  rw.write(body)
 
 # TODO #183: This is clumsy, we need a better way for doing cps-compatible
 # callbacks
-proc genHttpRoot(rw: ResponseWriter): C =
-  whelp onHttpRoot(rw)
+proc genHttpRoot(body: string): HttpServerCallback =
+  return proc(rw: ResponseWriter): C =
+    whelp onHttpRoot(body, rw)
 
+# HTTP server serving on both HTTP port 8080 and HTTPS port 8443
 proc doServer() {.cps:C.} =
+  # A bit of a convoluted test to pass around context to the document handler
+  # proc
+  let body = "Hello, world!\r\n"
   let hs = newHttpServer()
-  hs.addPath "/hello", genHttpRoot
+  hs.addPath "/hello", genHttpRoot(body)
   spawn hs.listenAndServe("::", "8080")
   spawn hs.listenAndServe("::", "8443", "cert.pem")
   sleep(0.1)
