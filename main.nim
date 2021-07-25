@@ -56,26 +56,6 @@ proc doProcess() {.cps:C.} =
   info "subprocess done, status: $1", status
 
 
-# Little test with unix sockets
-
-proc doUnixServer(conn: Conn) {.cps:C.} =
-  while true:
-    iowait(conn, POLLIN)
-    let c = conn.accept()
-    info c.read(32)
-    c.close()
-
-proc unixSockets() {.cps:C.} =
-  discard unlink "/tmp/sock"
-  let sconn = listen("/tmp/sock")
-  spawn doUnixServer(sconn)
-  sleep(0.5)
-  let cconn = dial("/tmp/sock")
-  iowait(cconn, POLLOUT)
-  discard cconn.write("Hello")
-  cconn.close()
-
-
 # Run all the tests
 proc runStuff() {.cps:C.} =
   info("CpsTest firing up")
@@ -87,7 +67,6 @@ proc runStuff() {.cps:C.} =
   spawn blocker()
   spawn doMatrix()
   spawn doProcess()
-  spawn unixSockets()
 
 
 var mylogger = newLogger(llDmp)

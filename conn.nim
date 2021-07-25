@@ -103,20 +103,6 @@ proc listen*(host: string, service: string, certfile: string = ""): Conn {.cps:C
   result = conn
 
 
-proc listen*(path: string): Conn {.cps:C.} =
-  # Bind and listen on a Unix domain socket
-  var sun = Sockaddr_Un(sun_family: AF_UNIX.TSa_Family)
-  copyMem(sun.sun_path.addr, path[0].unsafeAddr, path.len)
-  let fd = socket(AF_UNIX, SOCK_STREAM or O_NONBLOCK, 0)
-  var yes: int = 1
-  checkSyscall setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, yes.addr, sizeof(yes).SockLen)
-  checkSyscall bindSocket(fd, cast[ptr Sockaddr](sun.addr), sizeof(sun).SockLen)
-  checkSyscall listen(fd, SOMAXCONN)
-  let conn = newConn(fd.cint, "unix:" & path)
-  dump "$1: listen", conn
-  result = conn
-
-
 proc startTls*(conn: Conn, ctx: SslCtx, mode: TlsMode) {.cps:C.} =
   ## Switch the connection to TLS by adding a TLS context and performing
   ## the handshake
@@ -161,18 +147,6 @@ proc dial*(host: string, service: string, secure: bool): Conn {.cps:C.}=
     let ctx = SSL_CTX_new(SSLv23_method())
     conn.startTls(ctx, tlsClient)
   result = conn
-
-
-proc dial*(path: string): Conn {.cps:C.} =
-  ## Create a unix socket and connect to the given path
-  var sun = Sockaddr_Un(sun_family: AF_UNIX.TSa_Family)
-  if path.len >= sun.sun_path.len:
-    raise newException(ValueError, "oversized path")
-  copyMem(sun.sun_path.addr, path[0].unsafeAddr, path.len)
-  let fd = socket(AF_UNIX, SOCK_STREAM or O_NONBLOCK, 0)
-  let conn = newConn(fd.cint, "unix:" & path)
-  conn.connect(cast[ptr Sockaddr](sun.addr), sizeof(sun).SockLen)
-  conn
 
 
 proc accept*(sconn: Conn): Conn {.cps:C.} =
