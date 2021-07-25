@@ -11,16 +11,18 @@ import types, evq, http, httpserver, httpclient, matrix, resolver, logger, proce
 
 const log_tag = "main"
 
-# HTTP client serving on both HTTP and HTTPS
+
+# HTTP server serving on both HTTP port 8080 and HTTPS port 8443
 
 proc onHttpRoot(rw: http.ResponseWriter) {.cps:C.} =
   rw.write("Hello, world!\r\n");
 
-# This is clumsy, we need a better way for doing cps-compatible callbacks
+# TODO #183: This is clumsy, we need a better way for doing cps-compatible
+# callbacks
 proc genHttpRoot(rw: ResponseWriter): C =
   whelp onHttpRoot(rw)
 
-proc server() {.cps:C.} =
+proc doServer() {.cps:C.} =
   let hs = newHttpServer()
   hs.addPath "/hello", genHttpRoot
   spawn hs.listenAndServe("::", "8080")
@@ -29,7 +31,7 @@ proc server() {.cps:C.} =
 
 
 # Perform an async http request
-proc client(url: string) {.cps:C.} =
+proc doClient(url: string) {.cps:C.} =
   try:
     let client = httpClient.newClient()
     let rsp = client.get(url)
@@ -40,7 +42,7 @@ proc client(url: string) {.cps:C.} =
 
 
 # A simple periodic ticker
-proc ticker() {.cps:C.} =
+proc doTicker() {.cps:C.} =
   var n = 0
   while n < 5:
     sleep(1.0)
@@ -49,7 +51,7 @@ proc ticker() {.cps:C.} =
 
 
 # Offload blocking os.sleep() to a different thread
-proc blocker() {.cps:C.} =
+proc doBlocker() {.cps:C.} =
   debug "blocker start"
   onThread:
     os.sleep(4000)
@@ -76,10 +78,10 @@ proc doProcess() {.cps:C.} =
 # Run all the tests
 proc runStuff() {.cps:C.} =
   info("CpsTest firing up")
-  spawn server()
-  spawn client("https://localhost:8443/hello")
-  spawn ticker()
-  spawn blocker()
+  spawn doServer()
+  spawn doClient("https://localhost:8443/hello")
+  spawn doTicker()
+  spawn doBlocker()
   spawn doMatrix()
   spawn doProcess()
 
