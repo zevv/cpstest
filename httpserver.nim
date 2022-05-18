@@ -16,7 +16,7 @@ type
     connectionCount: int
     requestCount: int
 
-  HttpServerCallback* = proc(rw: ResponseWriter): C
+  HttpServerCallback* = proc(rw: ResponseWriter): bool {.cps:C.}
 
 
 proc doService(hs: HttpServer) {.cps:C.} =
@@ -63,9 +63,9 @@ proc doRequest(hs: HttpServer, bio: Bio) {.cps:C.} =
     rsp.statusCode = 200
     rsp.headers.add("Transfer-Encoding", "chunked")
     bio.write(rsp)
+    let c = hs.handlers[req.uri.path]
     let rw = newResponseWriter(bio)
-    let c = hs.handlers[req.uri.path](rw)
-    call c
+    discard c(rw)
     rw.write("")
   else:
     rsp.statusCode = 404

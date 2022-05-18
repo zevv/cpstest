@@ -12,22 +12,28 @@ import types, evq, http, httpserver, httpclient, matrix, resolver, logger, proce
 const log_tag = "main"
 
 
-proc onHttpRoot(body: string, rw: http.ResponseWriter) {.cps:C.} =
-  rw.write(body)
+proc onHttpRoot(rw: http.ResponseWriter): bool {.cps:C.} =
+  rw.write("hello\r\n")
 
-# TODO #183: This is clumsy, we need a better way for doing cps-compatible
-# callbacks
-proc genHttpRoot(body: string): HttpServerCallback =
-  return proc(rw: ResponseWriter): C =
-    whelp onHttpRoot(body, rw)
+
+proc genHttpRoot(): HttpServerCallback =
+  return whelp onHttpRoot
+
 
 # HTTP server serving on both HTTP port 8080 and HTTPS port 8443
 proc doServer() {.cps:C.} =
-  # A bit of a convoluted test to pass around context to the document handler
-  # proc
-  let body = "Hello, world!\r\n"
   let hs = newHttpServer()
-  hs.addPath "/hello", genHttpRoot(body)
+
+  # This works
+  
+  let cb: HttpServerCallback = genHttpRoot()
+
+  # But this does not
+  # Error: illegal capture 'rw' because 'Finish' has the calling convention: <nimcall>
+  #let cb: HttpServerCallback = whelp onHttpRoot
+  
+  hs.addPath "/hello", cb
+  #hs.addPath "/hello", whelp onHttpRoot
   spawn hs.listenAndServe("::", "8080")
   spawn hs.listenAndServe("::", "8443", "cert.pem")
   sleep(0.1)
