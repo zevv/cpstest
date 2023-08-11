@@ -26,7 +26,7 @@ proc logConsole(rec: LogRec) =
 
   for l in rec.msg.splitLines():
     if l.len > 0:
-      io.stderr.write prefix & l & suffix
+      stderr.write prefix & l & suffix
 
 
 proc newLogger*(level: LogLevel): Logger =
