@@ -4,12 +4,6 @@ import cps
 import types
 import evq
 
-when defined(isNimSkull):
-  import system/io
-else:
-  import std/syncio
-
-
 proc levelInfo(level: LogLevel): (string, string) =
   case level
     of llDmp: ("dmp", "\e[30;1m")
