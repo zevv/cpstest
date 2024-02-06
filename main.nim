@@ -68,14 +68,14 @@ proc doMatrix() {.cps:C.} =
 
 
 # Spawn a subprocess, do some stdin/stdout and wait for it to die
-proc doProcess() {.cps:C.} =
-  info "subprocess starting"
-  let p = process.start("/usr/bin/rev", @[])
-  discard p.stdin.write("Reverse me")
-  p.stdin.close()
-  info "subprocess said: " & p.stdout.read(1024)
-  let status = p.wait()
-  info "subprocess done, status: $1", status
+#proc doProcess() {.cps:C.} =
+#  info "subprocess starting"
+#  let p = process.start("/usr/bin/rev", @[])
+#  discard p.stdin.write("Reverse me")
+#  p.stdin.close()
+#  info "subprocess said: " & p.stdout.read(1024)
+#  let status = p.wait()
+#  info "subprocess done, status: $1", status
 
 
 # Run all the tests
@@ -86,7 +86,7 @@ proc runStuff() {.cps:C.} =
   spawn doTicker()
   spawn doBlocker()
   spawn doMatrix()
-  spawn doProcess()
+#  spawn doProcess()
 
 
 var mylogger = newLogger(llDmp)
