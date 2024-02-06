@@ -5,7 +5,7 @@ import types
 import evq
 
 when defined(isNimSkull):
-  import io
+  import system/io
 else:
   import std/syncio
 
