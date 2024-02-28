@@ -1,7 +1,7 @@
 
 import std/[times, tables]
 import cps
-import types, evq, conn, bio, http, logger
+import types, evq, conn, bio, http, logger, stream
 
 const log_tag = "httpserver"
 
@@ -41,15 +41,15 @@ proc addPath*(hs: HttpServer, path: string, handler: HttpServerCallback) {.cps:C
   debug "addPath $1", path
 
 
-proc doRequest(hs: HttpServer, bio: Bio) {.cps:C.} =
+proc doRequest(hs: HttpServer, s: Stream) {.cps:C.} =
 
   # Request
   let req = newRequest()
-  bio.read(req)
+  s.read(req)
   if req.meth == "":
     return
   if req.contentLength > 0:
-    let reqBody = bio.read(req.contentLength)
+    let reqBody = s.read(req.contentLength)
 
   dump $req
 
@@ -62,32 +62,32 @@ proc doRequest(hs: HttpServer, bio: Bio) {.cps:C.} =
   if req.uri.path in hs.handlers:
     rsp.statusCode = 200
     rsp.headers.add("Transfer-Encoding", "chunked")
-    bio.write(rsp)
-    let rw = newResponseWriter(bio)
+    s.write(rsp)
+    let rw = newResponseWriter(s)
     let c = hs.handlers[req.uri.path](rw)
     call c
     rw.write("")
   else:
     rsp.statusCode = 404
-    bio.write(rsp)
+    s.write(rsp)
 
 
   #if rsp.contentLength > 0:
   #  discard bio.write(body)
-  bio.flush()
+  s.flush()
 
   if not req.keepAlive:
-    bio.close()
-    bio.close()
+    s.close()
+    s.close()
   
   inc hs.stats.requestCount
  
 
 proc doConnection(hs: HttpServer, conn: Conn) {.cps:C.} =
   inc hs.stats.connectionCount
-  let bio = newBio(conn)
-  while not bio.eof and not bio.eof:
-    doRequest(hs, bio)
+  let s = newBio(conn)
+  while not s.eof():
+    doRequest(hs, s)
   conn.close()
 
 

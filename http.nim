@@ -1,7 +1,7 @@
 
 import std/[tables,strutils,uri]
 import cps
-import bio, types
+import bio, types, stream
 
 type
   Headers* = ref object
@@ -25,7 +25,7 @@ type
   StatusCode = distinct int
 
   ResponseWriter* = ref object
-    bio: Bio
+    stream: Stream
 
 
 proc statusCodeStr(sc: int): string =
@@ -38,15 +38,15 @@ proc statusCodeStr(sc: int): string =
 
 # Chunked encoded writer
 
-proc newResponseWriter*(bio: Bio): ResponseWriter =
-  ResponseWriter(bio: bio)
+proc newResponseWriter*(s: Stream): ResponseWriter =
+  ResponseWriter(stream: s)
 
 
 proc write*(rw: ResponseWriter, s: string) {.cps:C.} =
-  discard rw.bio.write tohex(s.len)
-  discard rw.bio.write("\r\n")
-  discard rw.bio.write(s)
-  discard rw.bio.write("\r\n")
+  rw.stream.write tohex(s.len)
+  rw.stream.write("\r\n")
+  rw.stream.write(s)
+  rw.stream.write("\r\n")
 
 
 #
@@ -66,9 +66,9 @@ proc add*(headers: Headers, key: string, val: string) =
     headers.headers[key] = @[]
   headers.headers[key].add val
 
-proc read*(bio: Bio, headers: Headers) {.cps:C.} =
+proc read*(s: Stream, headers: Headers) {.cps:C.} =
   while true:
-    let line = bio.readLine()
+    let line = s.readLine()
     if line.len() == 0:
       break
     let ps = line.split(": ", 2)
@@ -116,16 +116,18 @@ proc `$`*(req: Request): string =
   result.add $req.headers
 
 
-proc read*(bio: Bio, req: Request) {.cps:C.} =
-  let line = bio.readLine()
+proc read*(s: Stream, req: Request) {.cps:C.} =
+  let line = s.readLine()
+  echo "Got req: ", line
+  quit 0
   if line == "":
-    bio.close()
+    s.close()
     return
   let ps = splitWhitespace(line, 3)
   let (meth, target, version) = (ps[0], ps[1], ps[2])
 
   req.meth = meth
-  bio.read(req.headers)
+  s.read(req.headers)
   
   req.keepAlive = req.headers.get("Connection") == "Keep-Alive"
   let host = req.headers.get("Host")
@@ -137,8 +139,8 @@ proc read*(bio: Bio, req: Request) {.cps:C.} =
   parseUri("http://" & host & target, req.uri)
 
 
-proc write*(bio: Bio, req: Request) {.cps:C.} =
-  discard bio.write($req)
+proc write*(s: Stream, req: Request) {.cps:C.} =
+  s.write($req)
 
 
 #
@@ -162,13 +164,13 @@ proc `$`*(rsp: Response): string =
   result.add $rsp.headers
 
 
-proc read*(bio: Bio, rsp: Response) {.cps:C.}=
-  let line = bio.readLine()
+proc read*(s: Stream, rsp: Response) {.cps:C.}=
+  let line = s.readLine()
   
   let ps = splitWhitespace(line, 3)
   rsp.statusCode = parseInt(ps[1])
   rsp.reason = ps[2]
-  bio.read(rsp.headers)
+  s.read(rsp.headers)
   
   try:
     rsp.contentLength = parseInt(rsp.headers.get("Content-Length"))
@@ -176,5 +178,7 @@ proc read*(bio: Bio, rsp: Response) {.cps:C.}=
     discard
 
 
-proc write*(bio: Bio, rsp: Response) {.cps:C.} =
-  discard bio.write $rsp
+proc write*(s: Stream, rsp: Response) {.cps:C.} =
+  s.write $rsp
+
+

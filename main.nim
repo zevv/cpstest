@@ -29,7 +29,7 @@ proc doServer() {.cps:C.} =
   let hs = newHttpServer()
   hs.addPath "/hello", genHttpRoot(body)
   spawn hs.listenAndServe("::", "8080")
-  spawn hs.listenAndServe("::", "8443", "cert.pem")
+  #spawn hs.listenAndServe("::", "8443", "cert.pem")
   sleep(0.1)
 
 
@@ -82,10 +82,10 @@ proc doMatrix() {.cps:C.} =
 proc runStuff() {.cps:C.} =
   info("CpsTest firing up")
   spawn doServer()
-  spawn doClient("https://localhost:8443/hello")
-  spawn doTicker()
-  spawn doBlocker()
-  spawn doMatrix()
+  #spawn doClient("https://localhost:8443/hello")
+  #spawn doTicker()
+  #spawn doBlocker()
+  #spawn doMatrix()
 #  spawn doProcess()
 
 

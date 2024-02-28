@@ -112,6 +112,10 @@ proc spawnAux*(c: C, cNew: C) {.cpsVoodoo.} =
   c.evq.push cNew
 
 
+proc setEvq*(c: C, cNew: C) {.cpsVoodoo.} =
+  cNew.evq = c.evq
+
+
 template spawn*(t: untyped) =
   ## Asynchronously spawn the passed function and add it to the current event queue
   spawnAux whelp t
