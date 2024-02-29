@@ -12,30 +12,35 @@ import types, evq, http, httpserver, httpclient, matrix, resolver, logger, proce
 const log_tag = "main"
 
 
-proc onHttpRoot(body: string, rw: http.ResponseWriter) {.cps:C.} =
-  rw.write(body)
+proc onHttpHello(req: http.Request, rsp: http.Response, s: Stream) {.cps:C.} =
 
-# TODO #183: This is clumsy, we need a better way for doing cps-compatible
-# callbacks
-proc genHttpRoot(body: string): HttpServerCallback =
-  return proc(rw: ResponseWriter): C =
-    whelp onHttpRoot(body, rw)
+  rsp.headers.add("Content-Type", "text/plain")
+  rsp.write()
+
+  while not s.eof:
+    let data = s.read(8)
+    echo("data: ", data)
+
+  s.write("Hello, ")
+  s.write("world!\r\n")
 
 
-proc onHttpRoot2(req: http.Request, s: Stream) {.cps:C.} =
-  echo "genHttpRoot2"
+proc onHttpWebsocket(req: http.Request, rsp: http.Response, s: Stream) {.cps:C.} =
+  rsp.headers.add("Sec-WebSocket-Protocol", "cps")
+  rsp.headers.add("Connection", "Upgrade")
+  rsp.headers.add("Upgrade", "websocket")
+  rsp.headers.add("Sec-WebSocket-Accept", "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=")
+  rsp.write()
 
 
 # HTTP server serving on both HTTP port 8080 and HTTPS port 8443
 proc doServer() {.cps:C.} =
-  # A bit of a convoluted test to pass around context to the document handler
-  # proc
   let body = "Hello, world!\r\n"
   let hs = newHttpServer()
-  hs.addPath "/hello", genHttpRoot(body)
-  hs.addPath2 "/hello2", whelp onHttpRoot2
+  hs.addPath "/hello", whelp onHttpHello
+  hs.addPath "/ws", whelp onHttpWebsocket
   spawn hs.listenAndServe("::", "8080")
-  #spawn hs.listenAndServe("::", "8443", "cert.pem")
+  spawn hs.listenAndServe("::", "8443", "cert.pem")
   sleep(0.1)
 
 

@@ -75,7 +75,7 @@ template do_ssl(stmt: typed): int =
 
 proc newConn*(fd: cint = -1, name: string = ""): Conn {.cps:C.} =
   result = Conn(fd: fd, name: name)
-  dump "$1: new", result
+  #dump "$1: new", result
 
 
 proc listen*(host: string, service: string, certfile: string = ""): Conn {.cps:C.} =

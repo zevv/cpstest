@@ -62,43 +62,4 @@ proc close*(s: Stream) {.cps:C.} =
   
 
 
-when isMainModule:
-
-  type 
-    TestStream = ref object of Stream
-      data: string
-      pos: int
-      eof: bool
-
-    Thing = proc() {.cps:C.}
-
-  proc readImpl(s: Stream, n: int): string {.cps:C.} = 
-    echo "== readImpl 1"
-    evq.sleep(1)
-    echo "== readImpl 2"
-    "flap"
-
-  proc newTestStream(): Stream =
-    Stream(
-      fn_read: whelp readImpl,
-    )
-
-#  proc sleeper() {.cps:C.} =
-#    echo "1 run"
-#    evq.sleep(0.1)
-#    echo "2 run"
-#
-#  proc run2(s: Stream, t: Thing) {.cps:C.} =
-#    let c = t.call()
-  
-  proc run() {.cps:C.} =
-    let s = newTestStream()
-    let r = s.read(10)
-    echo "r = ", r
-
-  var mylogger = newLogger(llDmp)
-  var myevq = newEvq(mylogger)
-  myevq.spawn run()
-  myevq.run()
-
 

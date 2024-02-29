@@ -11,15 +11,12 @@ type
     date: string
     stats: HttpServerStats
     handlers: Table[string, HttpServerCallback]
-    handlers2: Table[string, HttpServerCallback2]
 
   HttpServerStats = object
     connectionCount: int
     requestCount: int
 
-  HttpServerCallback* = proc(rw: ResponseWriter): C
-
-  HttpServerCallback2* = proc(req: Request, stream: Stream) {.cps:C.}
+  HttpServerCallback* = proc(req: Request, rsp: Response, s: Stream) {.cps:C.}
 
 
 proc doService(hs: HttpServer) {.cps:C.} =
@@ -42,24 +39,19 @@ proc newHttpServer*(): HttpServer {.cps:C.}=
 proc addPath*(hs: HttpServer, path: string, handler: HttpServerCallback) {.cps:C.} =
   hs.handlers[path] = handler
 
-proc addPath2*(hs: HttpServer, path: string, handler: HttpServerCallback2) {.cps:C.} =
-  hs.handlers2[path] = handler
 
 proc doRequest(hs: HttpServer, s: Stream) {.cps:C.} =
 
   # Request
-  let req = newRequest()
-  s.read(req)
+  let req = newRequest(s)
+  req.read()
   if req.meth == "":
     return
-  #if req.contentLength > 0:
-  #  let reqBody = s.read(req.contentLength)
-  #  echo "reqBody: ", reqBody
 
   dump $req
 
   # Response
-  let rsp = newResponse()
+  let rsp = newResponse(s)
   rsp.headers.add("Date", hs.date)
   rsp.headers.add("Server", "cpstest")
   rsp.keepAlive = req.keepAlive
@@ -67,14 +59,15 @@ proc doRequest(hs: HttpServer, s: Stream) {.cps:C.} =
   if req.uri.path in hs.handlers:
     rsp.statusCode = 200
     rsp.headers.add("Transfer-Encoding", "chunked")
-    s.write(rsp)
-    let rw = newResponseWriter(s)
-    let c = hs.handlers[req.uri.path](rw)
-    call c
-    rw.write("")
+    #rsp.write()
+    let cb = hs.handlers[req.uri.path]
+    let sHttp = http.newHttpStream(req, rsp, s)
+    var c = cb.call(req, rsp, sHttp)
+    mommify c
+    s.write("")
   else:
     rsp.statusCode = 404
-    s.write(rsp)
+    rsp.write()
 
 
   #if rsp.contentLength > 0:

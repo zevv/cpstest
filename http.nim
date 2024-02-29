@@ -8,6 +8,7 @@ type
     headers*: Table[string, seq[string]]
   
   Request* = ref object
+    s: Stream
     meth*: string
     uri*: Uri
     keepAlive*: bool
@@ -15,12 +16,14 @@ type
     headers*: Headers
 
   Response* = ref object
+    s: Stream
     headers*: Headers
     statusCode*: int
     reason*: string
     contentLength*: int
     keepAlive*: bool
     body*: string
+    written: bool
 
   StatusCode = distinct int
 
@@ -36,17 +39,47 @@ proc statusCodeStr(sc: int): string =
   of 404: "404 Not Found"
   else: $sc
 
-# Chunked encoded writer
 
-proc newResponseWriter*(s: Stream): ResponseWriter =
-  ResponseWriter(stream: s)
+# HTTP stream. The reader reads Content-Length from the underlying sink,
+# the writer sends data in chunked encoding.
+
+type
+  HttpStream = ref object of Stream
+    read_avail: int
+    sink: Stream
+    rsp: Response
 
 
-proc write*(rw: ResponseWriter, s: string) {.cps:C.} =
-  rw.stream.write tohex(s.len)
-  rw.stream.write("\r\n")
-  rw.stream.write(s)
-  rw.stream.write("\r\n")
+proc httpStreamWriteImpl(s: Stream, data: string) {.cps:C.} =
+  let hs = s.HttpStream
+  #hs.rsp.write()
+  let sink = hs.sink
+  sink.write tohex(data.len)
+  sink.write("\r\n")
+  sink.write(data)
+  sink.write("\r\n")
+
+
+proc httpStreamReadImpl(s: Stream, n: int): string {.cps:C.} =
+  let sink = s.HttpStream.sink
+  var count = min(s.HttpStream.read_avail, n)
+  result = sink.read(count)
+  s.HttpStream.read_avail -= count
+
+
+proc httpStreamEofImpl(s: Stream): bool {.cps:C.} =
+  s.HttpStream.read_avail == 0
+
+
+proc newHttpStream*(req: Request, rsp: Response, sink: Stream): Stream =
+  HttpStream(
+    rsp: rsp,
+    read_avail: req.contentLength,
+    sink: sink,
+    fn_write: whelp httpStreamWriteImpl,
+    fn_read: whelp httpStreamReadImpl,
+    fn_eof: whelp httpStreamEofImpl,
+  )
 
 
 #
@@ -66,7 +99,7 @@ proc add*(headers: Headers, key: string, val: string) =
     headers.headers[key] = @[]
   headers.headers[key].add val
 
-proc read*(s: Stream, headers: Headers) {.cps:C.} =
+proc read*(headers: Headers, s: Stream) {.cps:C.} =
   while true:
     let line = s.readLine()
     if line.len() == 0:
@@ -90,8 +123,9 @@ proc get*(headers: Headers, key: string): string =
 # Request
 #
 
-proc newRequest*(): Request {.cps:C.} =
+proc newRequest*(s: Stream): Request {.cps:C.} =
   Request(
+    s: s,
     headers: Headers()
   )
 
@@ -102,6 +136,10 @@ proc newRequest*(meth: string, url: string): Request =
     headers: http.Headers(),
   )
   parseUri(url, result.uri)
+
+
+proc setStream*(req: Request, s: Stream) =
+  req.s = s
 
 
 proc `$`*(req: Request): string =
@@ -116,16 +154,16 @@ proc `$`*(req: Request): string =
   result.add $req.headers
 
 
-proc read*(s: Stream, req: Request) {.cps:C.} =
-  let line = s.readLine()
+proc read*(req: Request) {.cps:C.} =
+  let line = req.s.readLine()
   if line == "":
-    s.close()
+    req.s.close()
     return
   let ps = splitWhitespace(line, 3)
   let (meth, target, version) = (ps[0], ps[1], ps[2])
 
   req.meth = meth
-  s.read(req.headers)
+  req.headers.read(req.s)
   
   req.keepAlive = req.headers.get("Connection") == "Keep-Alive"
   let host = req.headers.get("Host")
@@ -137,16 +175,17 @@ proc read*(s: Stream, req: Request) {.cps:C.} =
   parseUri("http://" & host & target, req.uri)
 
 
-proc write*(s: Stream, req: Request) {.cps:C.} =
-  s.write($req)
+proc write*(req: Request) {.cps:C.} =
+  req.s.write($req)
 
 
 #
 # Response
 #
 
-proc newResponse*(): Response =
-  result = Response(
+proc newResponse*(s: Stream): Response =
+  Response(
+    s: s,
     headers: http.Headers(),
     contentLength: -1,
   )
@@ -154,7 +193,6 @@ proc newResponse*(): Response =
 
 proc `$`*(rsp: Response): string =
   result.add "HTTP/1.0 " & statusCodeStr(rsp.statusCode) & "\r\n"
-  result.add "Content-Type: text/plain\r\n" 
   if rsp.contentLength > 0:
     result.add "Content-Length: " & $rsp.contentLength & "\r\n" 
   if rsp.keepAlive:
@@ -168,7 +206,7 @@ proc read*(s: Stream, rsp: Response) {.cps:C.}=
   let ps = splitWhitespace(line, 3)
   rsp.statusCode = parseInt(ps[1])
   rsp.reason = ps[2]
-  s.read(rsp.headers)
+  rsp.headers.read(s)
   
   try:
     rsp.contentLength = parseInt(rsp.headers.get("Content-Length"))
@@ -176,7 +214,9 @@ proc read*(s: Stream, rsp: Response) {.cps:C.}=
     discard
 
 
-proc write*(s: Stream, rsp: Response) {.cps:C.} =
-  s.write $rsp
+proc write*(rsp: Response) {.cps:C.} =
+  if not rsp.written:
+    rsp.s.write $rsp
+    rsp.written = true
 
 

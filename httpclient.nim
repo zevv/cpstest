@@ -20,7 +20,7 @@ proc request*(client: Client, meth: string, url: string, body: string = ""): Res
   # Build request
   let req = newRequest(meth, url)
   req.contentLength = body.len
-
+  
   # Open connection and send request
   var port = req.uri.port
   if port == "":
@@ -28,13 +28,16 @@ proc request*(client: Client, meth: string, url: string, body: string = ""): Res
   let secure = req.uri.scheme == "https"
   client.conn = conn.dial(req.uri.hostname, port, secure)
   client.stream = newBio(client.conn)
-  client.stream.write(req)
+
+  req.setStream(client.stream)
+
+  req.write()
   if body.len > 0:
     client.stream.write(body)
   client.stream.flush()
 
   # Handle response
-  var rsp = newResponse()
+  var rsp = newResponse(client.stream)
   client.stream.read(rsp)
   
   return rsp
