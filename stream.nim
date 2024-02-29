@@ -52,6 +52,7 @@ proc eof*(s: Stream): bool {.cps:C.} =
   let cb = s.fn_eof
   var c = cb.call(s)
   mommify c
+  recover cb, c
 
 
 proc close*(s: Stream) {.cps:C.} =

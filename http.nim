@@ -118,8 +118,6 @@ proc `$`*(req: Request): string =
 
 proc read*(s: Stream, req: Request) {.cps:C.} =
   let line = s.readLine()
-  echo "Got req: ", line
-  quit 0
   if line == "":
     s.close()
     return

@@ -76,7 +76,6 @@ proc readBytes*(bio: Bio, delim: char): string {.cps:C.} =
 proc bioReadImpl(s:Stream, n: int): string {.cps:C.} =
   ## Read 'n' bytes form the bio; may return less then the requested
   ## number of bytes when the underlying conn goes EOF
-  echo "== readImpl"
   let bio = s.Bio
   while not bio.eof and bio.r.buf.len - bio.r.tail < n:
     bio.fill()
@@ -89,7 +88,6 @@ proc bioReadImpl(s:Stream, n: int): string {.cps:C.} =
 
 proc bioReadLineImpl*(s: Stream): string {.cps:C.} =
   ## Read one line from the bio. Lines are terminated with '\n' or '\r\n'.
-  echo "== readLineImpl"
   result = s.Bio.readBytes('\n')
   result.stripTrailing('\n')
   result.stripTrailing('\r')
@@ -97,7 +95,6 @@ proc bioReadLineImpl*(s: Stream): string {.cps:C.} =
 
 proc bioEofImpl*(s: Stream): bool {.cps:C.} =
   ## Return true if the bio is at EOF
-  echo "== bioEofImpl"
   result = s.Bio.eof
 
 
@@ -105,7 +102,6 @@ proc bioWriteImpl*(st: Stream, s: string) {.cps:C.} =
   ## Write data to the bio buffer, potentially performing one or more writes to
   ## the underlying conn when the bio buffer size is exceeded. Returns the
   ## number of bytes written.
-  echo "== bioWriteImpl"
   let bio = st.Bio
   if not bio.eof:
     bio.w.buf.add s
@@ -127,7 +123,6 @@ proc bioFlushImpl*(s: Stream) {.cps:C.} =
 
 proc bioCloseImpl*(s: Stream) {.cps:C.} =
   ## Close the bio, also closes the underlying conn
-  echo "== bioCloseImpl"
   s.Bio.conn.close()
   s.Bio.eof = true
 
