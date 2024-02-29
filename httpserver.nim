@@ -11,12 +11,15 @@ type
     date: string
     stats: HttpServerStats
     handlers: Table[string, HttpServerCallback]
+    handlers2: Table[string, HttpServerCallback2]
 
   HttpServerStats = object
     connectionCount: int
     requestCount: int
 
   HttpServerCallback* = proc(rw: ResponseWriter): C
+
+  HttpServerCallback2* = proc(req: Request, stream: Stream) {.cps:C.}
 
 
 proc doService(hs: HttpServer) {.cps:C.} =
@@ -38,8 +41,9 @@ proc newHttpServer*(): HttpServer {.cps:C.}=
 
 proc addPath*(hs: HttpServer, path: string, handler: HttpServerCallback) {.cps:C.} =
   hs.handlers[path] = handler
-  debug "addPath $1", path
 
+proc addPath2*(hs: HttpServer, path: string, handler: HttpServerCallback2) {.cps:C.} =
+  hs.handlers2[path] = handler
 
 proc doRequest(hs: HttpServer, s: Stream) {.cps:C.} =
 
@@ -48,8 +52,9 @@ proc doRequest(hs: HttpServer, s: Stream) {.cps:C.} =
   s.read(req)
   if req.meth == "":
     return
-  if req.contentLength > 0:
-    let reqBody = s.read(req.contentLength)
+  #if req.contentLength > 0:
+  #  let reqBody = s.read(req.contentLength)
+  #  echo "reqBody: ", reqBody
 
   dump $req
 

@@ -7,7 +7,7 @@
 from os import nil
 import posix
 import cps
-import types, evq, http, httpserver, httpclient, matrix, resolver, logger, process, conn
+import types, evq, http, httpserver, httpclient, matrix, resolver, logger, process, conn, stream
 
 const log_tag = "main"
 
@@ -21,6 +21,11 @@ proc genHttpRoot(body: string): HttpServerCallback =
   return proc(rw: ResponseWriter): C =
     whelp onHttpRoot(body, rw)
 
+
+proc onHttpRoot2(req: http.Request, s: Stream) {.cps:C.} =
+  echo "genHttpRoot2"
+
+
 # HTTP server serving on both HTTP port 8080 and HTTPS port 8443
 proc doServer() {.cps:C.} =
   # A bit of a convoluted test to pass around context to the document handler
@@ -28,8 +33,9 @@ proc doServer() {.cps:C.} =
   let body = "Hello, world!\r\n"
   let hs = newHttpServer()
   hs.addPath "/hello", genHttpRoot(body)
+  hs.addPath2 "/hello2", whelp onHttpRoot2
   spawn hs.listenAndServe("::", "8080")
-  spawn hs.listenAndServe("::", "8443", "cert.pem")
+  #spawn hs.listenAndServe("::", "8443", "cert.pem")
   sleep(0.1)
 
 
@@ -82,10 +88,10 @@ proc doMatrix() {.cps:C.} =
 proc runStuff() {.cps:C.} =
   info("CpsTest firing up")
   spawn doServer()
-  spawn doClient("https://localhost:8443/hello")
-  spawn doTicker()
-  spawn doBlocker()
-  spawn doMatrix()
+  #spawn doClient("https://localhost:8443/hello")
+  #spawn doTicker()
+  #spawn doBlocker()
+  #spawn doMatrix()
 #  spawn doProcess()
 
 
