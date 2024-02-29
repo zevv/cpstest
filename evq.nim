@@ -112,10 +112,6 @@ proc spawnAux*(c: C, cNew: C) {.cpsVoodoo.} =
   c.evq.push cNew
 
 
-proc setEvq*(c: C, cNew: C) {.cpsVoodoo.} =
-  cNew.evq = c.evq
-
-
 proc mommify*(c: C, cNew: C): C {.cpsMagic.} =
   cNew.mom = c
   c.evq.push cNew

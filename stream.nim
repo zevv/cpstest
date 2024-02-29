@@ -30,44 +30,34 @@ proc read*(s: Stream, n: int): string {.cps:C.} =
 
 
 proc readLine*(s: Stream): string {.cps:C.} =
-  echo "== readLine"
   let cb = s.fn_read_line
   var c = cb.call(s)
-  c.setEvq
-  discard trampoline(c)
-  #cb.recover(c)
+  mommify c
+  recover cb, c
 
 
 proc write*(s: Stream, data: string) {.cps:C.} =
-  echo "== write"
   let cb = s.fn_write
   var c = cb.call(s, data)
-  c.setEvq
-  discard trampoline(c)
+  mommify c
 
 
 proc flush*(s: Stream) {.cps:C.} =
-  echo "== flush"
   let cb = s.fn_flush
   let c = cb.call(s)
-  c.setEvq
-  discard trampoline(c)
+  mommify c
 
 
 proc eof*(s: Stream): bool {.cps:C.} =
-  echo "== eof"
   let cb = s.fn_eof
   var c = cb.call(s)
-  c.setEvq
-  discard trampoline(c)
+  mommify c
 
 
 proc close*(s: Stream) {.cps:C.} =
-  echo "== close"
   let cb = s.fn_close
   let c = cb.call(s)
-  c.setEvq
-  discard trampoline(c)
+  mommify c
   
 
 
