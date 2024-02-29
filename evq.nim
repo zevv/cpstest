@@ -116,6 +116,11 @@ proc setEvq*(c: C, cNew: C) {.cpsVoodoo.} =
   cNew.evq = c.evq
 
 
+proc mommify*(c: C, cNew: C): C {.cpsMagic.} =
+  cNew.mom = c
+  c.evq.push cNew
+
+
 template spawn*(t: untyped) =
   ## Asynchronously spawn the passed function and add it to the current event queue
   spawnAux whelp t

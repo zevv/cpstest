@@ -69,8 +69,9 @@ proc readBytes*(bio: Bio, delim: char): string {.cps:C.} =
         bio.r.tail = 0
         break
 
-
-
+#
+# Bufferd I/O stream implementation
+#
 
 proc bioReadImpl(s:Stream, n: int): string {.cps:C.} =
   ## Read 'n' bytes form the bio; may return less then the requested
