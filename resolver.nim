@@ -13,8 +13,8 @@ proc getaddrinfo*(host: string, service: string): seq[AddrInfo] {.cps:C.} =
   hints.ai_family = AF_UNSPEC
   hints.ai_socktype = SOCK_STREAM
 
-  defer:
-    freeaddrinfo(res)
+  #defer:
+  #  freeaddrinfo(res)
 
   # the getaddrinfo() call is ran on a dedicated thread so not to block
   # the CPS event queue

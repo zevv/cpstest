@@ -25,7 +25,7 @@ proc doService(hs: HttpServer) {.cps:C.} =
     hs.date = now().utc().format("ddd, dd MMM yyyy HH:mm:ss 'GMT'")
     if stats != hs.stats:
       stats = hs.stats
-      info $stats.repr
+      linf $stats.repr
     sleep(1)
 
 
@@ -48,7 +48,7 @@ proc doRequest(hs: HttpServer, s: Stream) {.cps:C.} =
   if req.meth == "":
     return
 
-  dump $req
+  ldmp $req
 
   # Response
   let rsp = newResponse(s)
@@ -60,10 +60,9 @@ proc doRequest(hs: HttpServer, s: Stream) {.cps:C.} =
     rsp.statusCode = 200
     rsp.headers.add("Transfer-Encoding", "chunked")
     #rsp.write()
-    let cb = hs.handlers[req.uri.path]
     let sHttp = http.newHttpStream(req, rsp, s)
-    var c = cb.call(req, rsp, sHttp)
-    mommify c
+    let fn = hs.handlers[req.uri.path]
+    fn(req, rsp, sHttp)
     s.write("")
   else:
     rsp.statusCode = 404

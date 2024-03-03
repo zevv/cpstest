@@ -75,7 +75,7 @@ template do_ssl(stmt: typed): int =
 
 proc newConn*(fd: cint = -1, name: string = ""): Conn {.cps:C.} =
   result = Conn(fd: fd, name: name)
-  #dump "$1: new", result
+  #ldmp "$1: new", result
 
 
 proc listen*(host: string, service: string, certfile: string = ""): Conn {.cps:C.} =
@@ -92,7 +92,7 @@ proc listen*(host: string, service: string, certfile: string = ""): Conn {.cps:C
   checkSyscall listen(fd, SOMAXCONN)
   let name = getname(res.ai_addr, res.ai_addrlen)
   let conn = newConn(fd.cint, name)
-  dump "$1: listen", conn
+  ldmp "$1: listen", conn
 
   # Create SSL context if cert given
   if certfile != "":
@@ -119,7 +119,7 @@ proc startTls*(conn: Conn, ctx: SslCtx, mode: TlsMode) {.cps:C.} =
 
 proc connect*(conn: Conn, sa: ptr SockAddr, salen: SockLen) {.cps:C.} =
   ## Connect the conn to the given sockadder, potentially async
-  dump "$1: connect", conn
+  ldmp "$1: connect", conn
   var rc = posix.connect(conn.fd.SocketHandle, sa, salen)
   if rc == -1 and errno == EINPROGRESS:
     iowait(conn, POLLOUT)
@@ -162,7 +162,7 @@ proc accept*(sconn: Conn): Conn {.cps:C.} =
   # Setup SSL if the parent conn has a SSL context
   if sconn.ctx != nil:
     conn.startTls(sconn.ctx, tlsServer)
-  dump "$1: accepted", conn
+  ldmp "$1: accepted", conn
   conn
 
 
@@ -191,8 +191,8 @@ proc read*(conn: Conn, n: int): string {.cps:C.} =
 
 proc close*(conn: Conn) {.cps:C.} =
   # Close the conn
-  dump "$1: close", conn
   if conn.fd != -1:
+    ldmp "$1: close", conn
     checkSyscall posix.close(conn.fd)
     conn.fd = -1
   if conn.ssl != nil:

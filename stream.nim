@@ -23,42 +23,27 @@ type
 
 
 proc read*(s: Stream, n: int): string {.cps:C.} =
-  let cb = s.fn_read
-  var c = cb.call(s, n)
-  mommify c
-  recover(cb, c)
+  s.fn_read(s, n)
 
 
 proc readLine*(s: Stream): string {.cps:C.} =
-  let cb = s.fn_read_line
-  var c = cb.call(s)
-  mommify c
-  recover cb, c
+  s.fn_read_line(s)
 
 
 proc write*(s: Stream, data: string) {.cps:C.} =
-  let cb = s.fn_write
-  var c = cb.call(s, data)
-  mommify c
+  s.fn_write(s, data)
 
 
 proc flush*(s: Stream) {.cps:C.} =
-  let cb = s.fn_flush
-  let c = cb.call(s)
-  mommify c
+  s.fn_flush(s)
 
 
 proc eof*(s: Stream): bool {.cps:C.} =
-  let cb = s.fn_eof
-  var c = cb.call(s)
-  mommify c
-  recover cb, c
+  s.fn_eof(s)
 
 
 proc close*(s: Stream) {.cps:C.} =
-  let cb = s.fn_close
-  let c = cb.call(s)
-  mommify c
+  s.fn_close(s)
   
 
 

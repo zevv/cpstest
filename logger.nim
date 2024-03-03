@@ -59,11 +59,11 @@ template make(mname, mlevel: untyped) =
     if mlevel >= l.level:
       l.log(mlevel, log_tag, msg % args)
 
-make(dump,  llDmp)
-make(debug, llDbg)
-make(info,  llInf)
-make(test,  llTst)
-make(warn,  llWrn)
-make(err,   llErr)
+make(ldmp, llDmp)
+make(ldbg, llDbg)
+make(linf, llInf)
+make(ltst, llTst)
+make(warn, llWrn)
+make(lerr, llErr)
 
 

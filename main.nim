@@ -19,7 +19,6 @@ proc onHttpHello(req: http.Request, rsp: http.Response, s: Stream) {.cps:C.} =
 
   while not s.eof:
     let data = s.read(8)
-    echo("data: ", data)
 
   s.write("Hello, ")
   s.write("world!\r\n")
@@ -49,7 +48,7 @@ proc doClient(url: string) {.cps:C.} =
   try:
     let client = httpClient.newClient()
     let rsp = client.get(url)
-    debug $rsp
+    ldbg $rsp
     let body = client.readBody(rsp)
   except OSError as e:
     warn "Could not connect to " & url & ": " & e.msg
@@ -61,15 +60,15 @@ proc doTicker() {.cps:C.} =
   while n < 5:
     sleep(1.0)
     inc n
-    debug "tick $1", n
+    ldbg "tick $1", n
 
 
 # Offload blocking os.sleep() to a different thread
 proc doBlocker() {.cps:C.} =
-  debug "blocker start"
+  ldbg "blocker start"
   onThread:
     os.sleep(4000)
-  debug "blocker done"
+  ldbg "blocker done"
 
 
 # Login to a matrix server
@@ -80,18 +79,18 @@ proc doMatrix() {.cps:C.} =
 
 # Spawn a subprocess, do some stdin/stdout and wait for it to die
 #proc doProcess() {.cps:C.} =
-#  info "subprocess starting"
+#  linf "subprocess starting"
 #  let p = process.start("/usr/bin/rev", @[])
 #  discard p.stdin.write("Reverse me")
 #  p.stdin.close()
-#  info "subprocess said: " & p.stdout.read(1024)
+#  linf "subprocess said: " & p.stdout.read(1024)
 #  let status = p.wait()
-#  info "subprocess done, status: $1", status
+#  linf "subprocess done, status: $1", status
 
 
 # Run all the tests
 proc runStuff() {.cps:C.} =
-  info("CpsTest firing up")
+  linf("CpsTest firing up")
   spawn doServer()
   #spawn doClient("https://localhost:8443/hello")
   #spawn doTicker()
@@ -100,7 +99,7 @@ proc runStuff() {.cps:C.} =
 #  spawn doProcess()
 
 
-var mylogger = newLogger(llDmp)
+var mylogger = newLogger(llInf)
 var myevq = newEvq(mylogger)
 myevq.spawn runStuff()
 myevq.run()

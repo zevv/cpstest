@@ -42,7 +42,7 @@ proc reaper(p: Process) {.cps:C.} =
   p.stdout.close()
   p.stderr.close()
   p.reaped = true
-  debug "process $1 reaped, status: $2", p.pid, p.status
+  ldbg "process $1 reaped, status: $2", p.pid, p.status
 
   resumeWaiting(p)
 
@@ -86,7 +86,7 @@ proc start*(pc: ProcessCtx): Process {.cps:C.} =
     let r = posix.execv(pc.cmd, cargs)
     posix.exitnow(-1)
 
-  debug "process started pid: $1, cmd: '$2'", p.pid, pc.cmd
+  ldbg "process started pid: $1, cmd: '$2'", p.pid, pc.cmd
 
   checkSyscall posix.close fd[0][0]
   checkSyscall posix.close fd[1][1]
